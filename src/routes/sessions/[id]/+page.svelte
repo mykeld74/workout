@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import Countdown from '#lib/components/Countdown.svelte';
+	import { keepScreenOn } from '#lib/wake-lock.ts';
 	import ExerciseCues from '#lib/components/ExerciseCues.svelte';
 	import type { PageProps } from './$types';
 
@@ -18,6 +19,11 @@
 
 	const kind = $derived(data.workout.kind);
 	const finished = $derived(!!data.session.completedAt);
+
+	// Keep the phone awake between sets until the workout is finished.
+	$effect(() => {
+		if (!finished) return keepScreenOn();
+	});
 
 	type Log = (typeof data.logs)[number];
 
