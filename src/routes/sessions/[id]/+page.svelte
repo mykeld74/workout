@@ -122,7 +122,6 @@
 			{item.target}
 			{#if item.rest !== '—'}<span class="muted"> · rest {item.rest}</span>{/if}
 		</p>
-		{#key ex.id}<ExerciseCues exercise={ex} collapsible />{/key}
 
 		{#if previous}
 			<p class="last">
@@ -226,6 +225,10 @@
 		{#if index < data.items.length - 1}
 			<button type="button" class="btn" onclick={() => go(index + 1)}>Next →</button>
 		{/if}
+	</div>
+
+	<div class="howto-slot">
+		{#key ex.id}<ExerciseCues exercise={ex} collapsible />{/key}
 	</div>
 
 	{#if !finished && (index === data.items.length - 1 || allDone)}
@@ -417,6 +420,10 @@
 
 	.pager .btn {
 		flex: 1;
+	}
+
+	.howto-slot {
+		margin-top: 16px;
 	}
 
 	.finish {
