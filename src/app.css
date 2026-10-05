@@ -1,0 +1,177 @@
+:root {
+	--paper: #fbfaf7;
+	--panel: #ffffff;
+	--wash: #efece5;
+	--ink: #1c1b19;
+	--ink-2: #5c5850;
+	--line: #c9c4b8;
+	--line-strong: #3a3833;
+	--push: #b8430f;
+	--pull: #1f4fa8;
+	--mobility: #2f6b3a;
+	--accent: var(--ink);
+	--on-accent: #ffffff;
+	--danger: #a32020;
+	--good: #2f6b3a;
+	--radius: 10px;
+	--display: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+	--body: 'Barlow', system-ui, sans-serif;
+	color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		--paper: #161512;
+		--panel: #201f1b;
+		--wash: #2a2924;
+		--ink: #f1eee7;
+		--ink-2: #aaa59a;
+		--line: #3d3b35;
+		--line-strong: #8b8679;
+		--push: #f08a54;
+		--pull: #7ea6f2;
+		--mobility: #7fc28c;
+		--on-accent: #161512;
+		--danger: #f07a7a;
+		--good: #7fc28c;
+		color-scheme: dark;
+	}
+}
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html {
+	-webkit-text-size-adjust: 100%;
+}
+
+body {
+	margin: 0;
+	background: var(--paper);
+	color: var(--ink);
+	font-family: var(--body);
+	font-size: 17px;
+	line-height: 1.45;
+}
+
+h1,
+h2,
+h3 {
+	font-family: var(--display);
+	font-weight: 800;
+	line-height: 0.95;
+	margin: 0;
+	letter-spacing: 0.01em;
+}
+
+a {
+	color: inherit;
+}
+
+.kicker {
+	font-size: 13px;
+	font-weight: 600;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--ink-2);
+}
+
+.muted {
+	color: var(--ink-2);
+}
+
+.kind-push {
+	--accent: var(--push);
+}
+.kind-pull {
+	--accent: var(--pull);
+}
+.kind-mobility {
+	--accent: var(--mobility);
+}
+
+.btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	min-height: 48px;
+	padding: 0 20px;
+	border-radius: var(--radius);
+	border: 2px solid var(--accent);
+	background: var(--accent);
+	color: var(--on-accent);
+	font: 600 17px/1 var(--body);
+	text-decoration: none;
+	cursor: pointer;
+}
+
+.btn.ghost {
+	background: transparent;
+	color: var(--accent);
+}
+
+.btn.small {
+	min-height: 40px;
+	padding: 0 14px;
+	font-size: 15px;
+}
+
+.btn:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.btn:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible {
+	outline: 3px solid var(--accent);
+	outline-offset: 2px;
+}
+
+input,
+select,
+textarea {
+	font: inherit;
+	color: var(--ink);
+	background: var(--panel);
+	border: 1.5px solid var(--line-strong);
+	border-radius: 8px;
+	padding: 10px 12px;
+	min-height: 46px;
+	width: 100%;
+}
+
+label {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	font-weight: 600;
+	font-size: 15px;
+}
+
+.card {
+	background: var(--panel);
+	border: 1.5px solid var(--line);
+	border-radius: var(--radius);
+	padding: 16px;
+}
+
+.error {
+	color: var(--danger);
+	font-weight: 600;
+}
+
+.sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	white-space: nowrap;
+}
