@@ -215,7 +215,8 @@ export async function workoutVitals(userId: string, start: Date, end: Date) {
 		avgHr: bpm.length ? Math.round(bpm.reduce((a, b) => a + b, 0) / bpm.length) : null,
 		maxHr: peaks.length ? Math.round(Math.max(...peaks)) : null,
 		calories: active.length ? Math.round(active.reduce((a, c) => a + c.value, 0)) : null,
-		watchMinutes: sessions[0] ? Math.round(sessions[0].value / 60) : null
+		watchMinutes: sessions[0] ? Math.round(sessions[0].value / 60) : null,
+		watchType: typeof sessions[0]?.detail?.type === 'string' ? sessions[0].detail.type : null
 	};
 }
 

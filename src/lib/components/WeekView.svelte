@@ -24,7 +24,7 @@
 	onMount(() => (mounted = true));
 
 	const view = $derived(summarizeWeek(history, streakMin));
-	const moves = $derived(activity ? summarizeActivity(activity) : null);
+	const moves = $derived(activity ? summarizeActivity(activity, history) : null);
 </script>
 
 {#if mounted}

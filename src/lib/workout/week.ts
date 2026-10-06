@@ -1,6 +1,7 @@
 /** The Plan page's "This week" panel, worked out in the phone's local time. */
 
 export interface Finished {
+	startedAt?: Date;
 	completedAt: Date;
 	kind: string;
 }
@@ -75,9 +76,26 @@ export interface Activity {
 	exercise: { time: Date; minutes: number; type: string | null; distanceMeters: number | null }[];
 }
 
-/** Workouts the watch logged that aren't lifting (the app already tracks those). */
-export function isCardio(type: string | null): boolean {
-	return !type || !/strength|weight|calisthenic/i.test(type);
+/** Watch workout types that are lifting, not cardio. */
+export function isLiftingType(type: string | null): boolean {
+	return !!type && /strength|weight|calisthenic|circuit/i.test(type);
+}
+
+/** Watch workouts that overlap a workout logged here (give or take 15 min) are that lift. */
+const SLACK_MS = 15 * 60 * 1000;
+export function overlapsLoggedLift(
+	e: { time: Date; minutes: number },
+	history: Finished[]
+): boolean {
+	const start = e.time.getTime();
+	const end = start + e.minutes * 60 * 1000;
+	return history.some(
+		(h) =>
+			h.kind !== 'mobility' &&
+			h.startedAt !== undefined &&
+			start < h.completedAt.getTime() + SLACK_MS &&
+			end > h.startedAt.getTime() - SLACK_MS
+	);
 }
 
 /** "BIKING_STATIONARY" → "Biking stationary"; numeric or missing types → "Workout". */
@@ -98,13 +116,23 @@ export interface ActivitySummary {
 }
 
 /** Steps (average per day so far) and cardio sessions for the current week, in local time. */
-export function summarizeActivity(activity: Activity, now = new Date()): ActivitySummary {
+export function summarizeActivity(
+	activity: Activity,
+	history: Finished[] = [],
+	now = new Date()
+): ActivitySummary {
 	const monday = mondayOf(now);
 	const steps = activity.steps.filter((s) => s.time >= monday && s.time <= now);
 	const days = new Set(steps.map((s) => s.time.toDateString())).size;
 	const total = steps.reduce((sum, s) => sum + s.count, 0);
 	const cardio = activity.exercise
-		.filter((e) => e.time >= monday && e.time <= now && isCardio(e.type))
+		.filter(
+			(e) =>
+				e.time >= monday &&
+				e.time <= now &&
+				!isLiftingType(e.type) &&
+				!overlapsLoggedLift(e, history)
+		)
 		.map((e) => ({
 			name: exerciseName(e.type),
 			minutes: e.minutes,

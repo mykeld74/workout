@@ -263,7 +263,11 @@ export async function getDashboard(userId: string) {
 
 	// Everything finished in the last 26 weeks, for the weekly view and streak.
 	const history = await db
-		.select({ completedAt: workoutSession.completedAt, kind: workout.kind })
+		.select({
+			startedAt: workoutSession.startedAt,
+			completedAt: workoutSession.completedAt,
+			kind: workout.kind
+		})
 		.from(workoutSession)
 		.innerJoin(workout, eq(workout.id, workoutSession.workoutId))
 		.where(
@@ -303,7 +307,11 @@ export async function getDashboard(userId: string) {
 		nextMobility: nextOf('mobility'),
 		inProgress: sessions.find((s) => !s.completedAt) ?? null,
 		recent: sessions.filter((s) => s.completedAt).slice(0, 6),
-		history: history.map((h) => ({ completedAt: h.completedAt!, kind: h.kind }))
+		history: history.map((h) => ({
+			startedAt: h.startedAt,
+			completedAt: h.completedAt!,
+			kind: h.kind
+		}))
 	};
 }
 

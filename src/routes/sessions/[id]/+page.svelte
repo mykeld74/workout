@@ -8,6 +8,7 @@
 	import { unlockAudio } from '#lib/alert-sound.ts';
 	import { addPending, flushPending, readPending, type PendingSet } from '#lib/offline-sets.ts';
 	import { deloadWeight, nextWeight } from '#lib/workout/progression.ts';
+	import { exerciseName } from '#lib/workout/week.ts';
 	import { keepScreenOn } from '#lib/wake-lock.ts';
 	import type { PageProps } from './$types';
 
@@ -221,7 +222,11 @@
 				{/if}
 			</dl>
 			{#if data.vitals}
-				<p class="muted watch-note">Heart rate and calories from your Galaxy Watch.</p>
+				<p class="muted watch-note">
+					From your Galaxy Watch{data.vitals.watchMinutes
+						? ` (${exerciseName(data.vitals.watchType)} session, ${data.vitals.watchMinutes} min)`
+						: ''}.
+				</p>
 			{/if}
 			{#if volumeChange !== null}
 				<p class="compare">
