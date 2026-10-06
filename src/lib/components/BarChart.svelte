@@ -15,7 +15,7 @@
 		/** Accessible name, e.g. "Steps per day, last 30 days". */
 		label: string;
 		formatY: (n: number) => string;
-		/** Unit after values in the tooltip, e.g. "steps". */
+		/** Unit after values in the readout, e.g. "steps". */
 		unit?: string;
 		height?: number;
 	}
@@ -25,7 +25,6 @@
 	let width = $state(600);
 	let active = $state<number | null>(null);
 
-	const pad = { top: 12, right: 8, bottom: 26, left: 52 };
 	const GAP = 2;
 	const RADIUS = 4;
 
@@ -42,6 +41,12 @@
 		const out: number[] = [];
 		for (let v = 0; v <= max + step * 0.999; v += step) out.push(Number(v.toFixed(6)));
 		return out;
+	});
+
+	/** Left inset follows the widest tick so labels sit inside the chart, not on the card edge. */
+	const pad = $derived.by(() => {
+		const widest = Math.max(2, ...ticks.map((t) => formatY(t).length));
+		return { top: 10, right: 4, bottom: 26, left: Math.ceil(widest * 8 + 16) };
 	});
 
 	const plotW = $derived(Math.max(1, width - pad.left - pad.right));
@@ -80,12 +85,22 @@
 		return out;
 	}
 
-	/** First, middle and last labels: enough to orient without crowding. */
-	const xLabels = $derived(
-		[...new Set([0, Math.floor((categories.length - 1) / 2), categories.length - 1])].filter(
-			(i) => i >= 0
-		)
-	);
+	/** As many date labels as fit, always including the first and last day. */
+	const xLabels = $derived.by(() => {
+		const n = categories.length;
+		if (n <= 1) return n ? [0] : [];
+		const longest = Math.max(...categories.map((c) => c.length));
+		const gap = Math.max(64, longest * 7 + 18);
+		const count = Math.max(2, Math.min(n, Math.floor(plotW / gap) + 1));
+		const idxs: number[] = [];
+		for (let k = 0; k < count; k++) {
+			const i = Math.round((k * (n - 1)) / (count - 1));
+			if (idxs.at(-1) !== i) idxs.push(i);
+		}
+		return idxs;
+	});
+
+	const shown = $derived(active ?? Math.max(0, categories.length - 1));
 
 	function describe(i: number) {
 		const parts = series.map((s) => `${s.label} ${formatY(s.values[i] ?? 0)}`);
@@ -122,6 +137,21 @@
 {/if}
 
 <div class="chart" bind:clientWidth={width}>
+	<div class="readout" aria-hidden="true">
+		<span class="date">{categories[shown]}</span>
+		{#if series.length > 1}
+			{#each series as s (s.key)}
+				<span class="row">
+					<span class="swatch" style:background={s.color}></span>
+					<strong>{formatY(s.values[shown] ?? 0)}</strong>
+					{s.label}
+				</span>
+			{/each}
+			<span class="total">{formatY(totals[shown])} total</span>
+		{:else}
+			<strong>{formatY(totals[shown])} {unit}</strong>
+		{/if}
+	</div>
 	<svg
 		viewBox="0 0 {width} {height}"
 		{height}
@@ -159,36 +189,12 @@
 			<text
 				class="axis"
 				x={bandX(i) + band / 2}
-				y={height - 8}
-				text-anchor={i === 0 ? 'start' : i === categories.length - 1 ? 'end' : 'middle'}
+				y={height - 6}
+				text-anchor={i === xLabels[0] ? 'start' : i === xLabels.at(-1) ? 'end' : 'middle'}
 				>{categories[i]}</text
 			>
 		{/each}
 	</svg>
-
-	{#if active !== null}
-		<div
-			class="tooltip"
-			class:flip={bandX(active) > width * 0.6}
-			style:left="{((bandX(active) + band / 2) / width) * 100}%"
-			aria-hidden="true"
-		>
-			<span class="date">{categories[active]}</span>
-			{#if series.length > 1}
-				{#each series as s (s.key)}
-					<span class="row"
-						><span class="swatch" style:background={s.color}></span><strong
-							>{formatY(s.values[active] ?? 0)}</strong
-						>
-						{s.label}</span
-					>
-				{/each}
-				<span class="row total">{formatY(totals[active])} total</span>
-			{:else}
-				<strong>{formatY(totals[active])} {unit}</strong>
-			{/if}
-		</div>
-	{/if}
 </div>
 
 <style>
@@ -250,30 +256,20 @@
 		border-radius: 3px;
 	}
 
-	.tooltip {
-		position: absolute;
-		top: 4px;
-		transform: translateX(10px);
+	.readout {
 		display: flex;
-		flex-direction: column;
-		gap: 3px;
-		min-width: 120px;
-		padding: 8px 10px;
-		border-radius: 8px;
-		background: var(--panel);
-		border: 1px solid var(--line);
-		box-shadow: 0 6px 18px rgb(0 0 0 / 0.12);
-		font-size: 13px;
-		pointer-events: none;
-		white-space: nowrap;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: 4px 14px;
+		min-height: 32px;
+		margin-bottom: 4px;
+		font-variant-numeric: tabular-nums;
 	}
 
-	.tooltip.flip {
-		transform: translateX(calc(-100% - 10px));
-	}
-
-	.tooltip strong {
-		font-size: 15px;
+	.readout strong {
+		font-size: 22px;
+		font-weight: 600;
+		letter-spacing: -0.02em;
 	}
 
 	.row {

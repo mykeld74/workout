@@ -70,170 +70,205 @@
 	<h1>Getting stronger</h1>
 </section>
 
-{#if !data.exercises.length}
-	<p class="card empty">
-		Finish a workout with a few logged sets and your progress shows up here: best sets, personal
-		records and body weight over time.
-	</p>
-{:else}
-	{#if records.length}
-		<section>
-			<h2>Recent personal records</h2>
-			<ul class="records">
-				{#each records as r (r.name + r.date.getTime())}
-					<li class="card">
-						<strong>{r.name}</strong>
-						<span>{setText(r, r.unit)}</span>
-						<span class="muted">{dateFmt.format(r.date)}</span>
+<div class="board">
+	{#if !data.exercises.length}
+		<p class="card empty span">
+			Finish a workout with a few logged sets and your progress shows up here: best sets, personal
+			records and body weight over time.
+		</p>
+	{:else}
+		{#if records.length}
+			<section class="span">
+				<h2>Recent personal records</h2>
+				<ul class="records">
+					{#each records as r (r.name + r.date.getTime())}
+						<li class="card">
+							<strong>{r.name}</strong>
+							<span>{setText(r, r.unit)}</span>
+							<span class="muted">{dateFmt.format(r.date)}</span>
+						</li>
+					{/each}
+				</ul>
+			</section>
+		{/if}
+
+		{#if selected}
+			<section class="card focus span">
+				<label class="picker">
+					Exercise
+					<select value={selected.id} onchange={(e) => (selectedId = e.currentTarget.value)}>
+						{#each data.exercises as e (e.id)}
+							<option value={e.id}>{e.name} ({e.points.length})</option>
+						{/each}
+					</select>
+				</label>
+
+				<div class="headline">
+					<div>
+						<p class="muted small">Latest best set</p>
+						<p class="figure">{setText(selected.points.at(-1)!, selected.unit)}</p>
+					</div>
+					{#if change(selected.points) !== null}
+						{@const pct = change(selected.points)!}
+						<div>
+							<p class="muted small">Since first logged</p>
+							<p class="figure">{pct >= 0 ? '+' : '−'}{Math.abs(pct)}%</p>
+						</div>
+					{/if}
+				</div>
+
+				<h2 class="chart-title">
+					{weighted ? 'Estimated max (lb)' : `Best ${unitWord}`} per workout
+				</h2>
+				{#if weighted}
+					<p class="muted small">
+						Combines weight and reps so heavier-but-fewer and lighter-but-more sets compare fairly.
+					</p>
+				{/if}
+				{#if selected.points.length >= 2}
+					{#key selected.id}
+						<LineChart
+							label="{selected.name}, {weighted ? 'estimated max' : unitWord} over time"
+							formatY={(n) => (weighted ? `${Math.round(n)}` : `${Math.round(n)}`)}
+							points={selected.points.map((p) => ({
+								date: p.date,
+								value: p.best,
+								highlight: p.record,
+								lines: [
+									setText(p, selected.unit),
+									...(weighted ? [`≈ ${Math.round(p.best)} lb max`] : [])
+								]
+							}))}
+						/>
+					{/key}
+				{:else}
+					<p class="muted single">
+						Logged once so far. Do it again and your trend line starts here.
+					</p>
+				{/if}
+
+				<details>
+					<summary>Show as table</summary>
+					<table>
+						<thead>
+							<tr><th>Date</th><th>Best set</th><th>Weight moved</th><th>PR</th></tr>
+						</thead>
+						<tbody>
+							{#each [...selected.points].reverse() as p (p.date.getTime())}
+								<tr>
+									<td>{dateFmt.format(p.date)}</td>
+									<td>{setText(p, selected.unit)}</td>
+									<td>{p.volume ? `${Math.round(p.volume).toLocaleString()} lb` : '—'}</td>
+									<td>{p.record ? 'Yes' : ''}</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</details>
+			</section>
+		{/if}
+
+		<section class="span">
+			<h2>All exercises</h2>
+			<ul class="list">
+				{#each data.exercises as e (e.id)}
+					{@const pct = change(e.points)}
+					<li>
+						<button
+							type="button"
+							aria-pressed={selected?.id === e.id}
+							onclick={() => {
+								selectedId = e.id;
+								window.scrollTo({ top: 0, behavior: 'smooth' });
+							}}
+						>
+							<span class="name">{e.name}</span>
+							<span class="muted">{setText(e.points.at(-1)!, e.unit)}</span>
+							{#if pct !== null}<span class="delta">{pct >= 0 ? '+' : '−'}{Math.abs(pct)}%</span
+								>{/if}
+						</button>
 					</li>
 				{/each}
 			</ul>
 		</section>
 	{/if}
 
-	{#if selected}
-		<section class="card focus">
-			<label class="picker">
-				Exercise
-				<select value={selected.id} onchange={(e) => (selectedId = e.currentTarget.value)}>
-					{#each data.exercises as e (e.id)}
-						<option value={e.id}>{e.name} ({e.points.length})</option>
-					{/each}
-				</select>
-			</label>
-
-			<div class="headline">
-				<div>
-					<p class="muted small">Latest best set</p>
-					<p class="figure">{setText(selected.points.at(-1)!, selected.unit)}</p>
-				</div>
-				{#if change(selected.points) !== null}
-					{@const pct = change(selected.points)!}
-					<div>
-						<p class="muted small">Since first logged</p>
-						<p class="figure">{pct >= 0 ? '+' : '−'}{Math.abs(pct)}%</p>
-					</div>
-				{/if}
-			</div>
-
-			<h2 class="chart-title">
-				{weighted ? 'Estimated max (lb)' : `Best ${unitWord}`} per workout
-			</h2>
-			{#if weighted}
-				<p class="muted small">
-					Combines weight and reps so heavier-but-fewer and lighter-but-more sets compare fairly.
-				</p>
-			{/if}
-			{#if selected.points.length >= 2}
-				{#key selected.id}
-					<LineChart
-						label="{selected.name}, {weighted ? 'estimated max' : unitWord} over time"
-						formatY={(n) => (weighted ? `${Math.round(n)}` : `${Math.round(n)}`)}
-						points={selected.points.map((p) => ({
-							date: p.date,
-							value: p.best,
-							highlight: p.record,
-							lines: [
-								setText(p, selected.unit),
-								...(weighted ? [`≈ ${Math.round(p.best)} lb max`] : [])
-							]
-						}))}
-					/>
-				{/key}
-			{:else}
-				<p class="muted single">Logged once so far. Do it again and your trend line starts here.</p>
-			{/if}
-
+	<section class="card focus">
+		<h2 class="chart-title">Body weight</h2>
+		<p class="muted small">One reading per day: the one closest to 6:00 AM.</p>
+		{#if data.bodyWeight.length >= 2}
+			<LineChart
+				label="Body weight over time"
+				formatY={(n) => `${Math.round(n)}`}
+				points={data.bodyWeight.map((b) => ({
+					date: b.date,
+					value: b.weight,
+					lines: [
+						`${b.weight} lb`,
+						`${timeFmt.format(b.date)} · ${b.source === 'samsung' ? 'Samsung Health' : 'entered after a workout'}`
+					]
+				}))}
+			/>
 			<details>
 				<summary>Show as table</summary>
 				<table>
-					<thead>
-						<tr><th>Date</th><th>Best set</th><th>Weight moved</th><th>PR</th></tr>
-					</thead>
+					<thead><tr><th>Date</th><th>Time</th><th>Body weight</th><th>Source</th></tr></thead>
 					<tbody>
-						{#each [...selected.points].reverse() as p (p.date.getTime())}
+						{#each [...data.bodyWeight].reverse() as b (b.date.getTime())}
 							<tr>
-								<td>{dateFmt.format(p.date)}</td>
-								<td>{setText(p, selected.unit)}</td>
-								<td>{p.volume ? `${Math.round(p.volume).toLocaleString()} lb` : '—'}</td>
-								<td>{p.record ? 'Yes' : ''}</td>
+								<td>{dateFmt.format(b.date)}</td>
+								<td>{timeFmt.format(b.date)}</td>
+								<td>{b.weight} lb</td>
+								<td>{b.source === 'samsung' ? 'Samsung Health' : 'Workout'}</td>
 							</tr>
 						{/each}
 					</tbody>
 				</table>
 			</details>
-		</section>
-	{/if}
-
-	<section>
-		<h2>All exercises</h2>
-		<ul class="list">
-			{#each data.exercises as e (e.id)}
-				{@const pct = change(e.points)}
-				<li>
-					<button
-						type="button"
-						aria-pressed={selected?.id === e.id}
-						onclick={() => {
-							selectedId = e.id;
-							window.scrollTo({ top: 0, behavior: 'smooth' });
-						}}
-					>
-						<span class="name">{e.name}</span>
-						<span class="muted">{setText(e.points.at(-1)!, e.unit)}</span>
-						{#if pct !== null}<span class="delta">{pct >= 0 ? '+' : '−'}{Math.abs(pct)}%</span>{/if}
-					</button>
-				</li>
-			{/each}
-		</ul>
+		{:else}
+			<p class="muted">
+				Add your body weight when you finish a workout, or <a href="/health"
+					>connect Samsung Health</a
+				>
+				({data.bodyWeight.length} so far). The trend appears after two entries.
+			</p>
+		{/if}
 	</section>
-{/if}
 
-<section class="card focus">
-	<h2 class="chart-title">Body weight</h2>
-	<p class="muted small">One reading per day: the one closest to 6:00 AM.</p>
-	{#if data.bodyWeight.length >= 2}
-		<LineChart
-			label="Body weight over time"
-			formatY={(n) => `${Math.round(n)}`}
-			points={data.bodyWeight.map((b) => ({
-				date: b.date,
-				value: b.weight,
-				lines: [
-					`${b.weight} lb`,
-					`${timeFmt.format(b.date)} · ${b.source === 'samsung' ? 'Samsung Health' : 'entered after a workout'}`
-				]
-			}))}
-		/>
-		<details>
-			<summary>Show as table</summary>
-			<table>
-				<thead><tr><th>Date</th><th>Time</th><th>Body weight</th><th>Source</th></tr></thead>
-				<tbody>
-					{#each [...data.bodyWeight].reverse() as b (b.date.getTime())}
-						<tr>
-							<td>{dateFmt.format(b.date)}</td>
-							<td>{timeFmt.format(b.date)}</td>
-							<td>{b.weight} lb</td>
-							<td>{b.source === 'samsung' ? 'Samsung Health' : 'Workout'}</td>
-						</tr>
-					{/each}
-				</tbody>
-			</table>
-		</details>
-	{:else}
-		<p class="muted">
-			Add your body weight when you finish a workout, or <a href="/health">connect Samsung Health</a
-			>
-			({data.bodyWeight.length} so far). The trend appears after two entries.
-		</p>
-	{/if}
-</section>
+	{#each [{ title: 'Resting heart rate', unit: 'bpm', rows: data.restingHr, note: 'Lower over time usually means better fitness. The rate you usually sit at while you are up, not the lowest beat of the day.' }, { title: 'Heart rate variability', unit: 'ms', rows: data.hrv, note: 'Higher usually means better recovered. From your Galaxy Watch, one value per day.' }] as m (m.title)}
+		{#if m.rows.length >= 2}
+			<section class="card focus">
+				<h2 class="chart-title">{m.title} ({m.unit})</h2>
+				<p class="muted small">{m.note}</p>
+				<LineChart
+					label="{m.title} over time"
+					formatY={(n) => `${Math.round(n)}`}
+					points={m.rows.map((r) => ({
+						date: r.date,
+						value: r.value,
+						lines: [`${r.value} ${m.unit}`]
+					}))}
+				/>
+				<details>
+					<summary>Show as table</summary>
+					<table>
+						<thead><tr><th>Date</th><th>{m.title}</th></tr></thead>
+						<tbody>
+							{#each [...m.rows].reverse() as r (r.date.getTime())}
+								<tr><td>{dateFmt.format(r.date)}</td><td>{r.value} {m.unit}</td></tr>
+							{/each}
+						</tbody>
+					</table>
+				</details>
+			</section>
+		{/if}
+	{/each}
 
-{#if data.activity.hasData}
-	<section class="activity">
-		<h2>Activity</h2>
-		<p class="muted small">From Samsung Health via your phone and Galaxy Watch.</p>
+	{#if data.activity.hasData}
+		<div class="span activity-head">
+			<h2>Activity</h2>
+			<p class="muted small">From Samsung Health via your phone and Galaxy Watch.</p>
+		</div>
 
 		<div class="card focus">
 			<h3 class="chart-title">Steps per day</h3>
@@ -295,7 +330,7 @@
 			/>
 		</div>
 
-		<div class="card focus">
+		<div class="card focus span">
 			<h3 class="chart-title">Workout minutes per week</h3>
 			<p class="muted small">
 				Last 12 weeks, from your watch. Lifting = strength or circuit sessions, plus unlabeled
@@ -304,7 +339,7 @@
 			<BarChart
 				label="Workout minutes per week, lifting and cardio, last 12 weeks"
 				formatY={(n) => `${Math.round(n)}`}
-				categories={data.activity.weeks.map((w) => `Wk of ${dayLabel(w.week)}`)}
+				categories={data.activity.weeks.map((w) => dayLabel(w.week))}
 				series={[
 					{
 						key: 'lifting',
@@ -339,7 +374,7 @@
 		</div>
 
 		{#if data.activity.sessions.length}
-			<div class="card">
+			<div class="card span">
 				<h3 class="chart-title">Watch sessions</h3>
 				<ul class="sessions">
 					{#each data.activity.sessions.slice(0, showAllSessions ? undefined : 10) as s (s.time.getTime())}
@@ -400,37 +435,8 @@
 				{/if}
 			</div>
 		{/if}
-	</section>
-{/if}
-
-{#each [{ title: 'Resting heart rate', unit: 'bpm', rows: data.restingHr, note: 'Lower over time usually means better fitness. The rate you usually sit at while you are up, not the lowest beat of the day.' }, { title: 'Heart rate variability', unit: 'ms', rows: data.hrv, note: 'Higher usually means better recovered. From your Galaxy Watch, one value per day.' }] as m (m.title)}
-	{#if m.rows.length >= 2}
-		<section class="card focus">
-			<h2 class="chart-title">{m.title} ({m.unit})</h2>
-			<p class="muted small">{m.note}</p>
-			<LineChart
-				label="{m.title} over time"
-				formatY={(n) => `${Math.round(n)}`}
-				points={m.rows.map((r) => ({
-					date: r.date,
-					value: r.value,
-					lines: [`${r.value} ${m.unit}`]
-				}))}
-			/>
-			<details>
-				<summary>Show as table</summary>
-				<table>
-					<thead><tr><th>Date</th><th>{m.title}</th></tr></thead>
-					<tbody>
-						{#each [...m.rows].reverse() as r (r.date.getTime())}
-							<tr><td>{dateFmt.format(r.date)}</td><td>{r.value} {m.unit}</td></tr>
-						{/each}
-					</tbody>
-				</table>
-			</details>
-		</section>
 	{/if}
-{/each}
+</div>
 
 <style>
 	section + section,
@@ -468,10 +474,24 @@
 		border-top: 4px solid var(--chart);
 	}
 
+	.board {
+		display: grid;
+		gap: 16px;
+		margin-top: 24px;
+	}
+
+	.board > section {
+		margin-top: 0;
+	}
+
 	.focus {
 		display: flex;
 		flex-direction: column;
 		gap: 12px;
+	}
+
+	.activity-head h2 {
+		margin-bottom: 4px;
 	}
 
 	.picker {
@@ -494,18 +514,14 @@
 		margin: 4px 0 0;
 	}
 
-	.activity {
-		display: flex;
-		flex-direction: column;
-		gap: 12px;
-	}
+	@media (min-width: 800px) {
+		.board {
+			grid-template-columns: 1fr 1fr;
+		}
 
-	.activity > h2 {
-		margin-bottom: 0;
-	}
-
-	.activity > p {
-		margin-top: -8px;
+		.span {
+			grid-column: 1 / -1;
+		}
 	}
 
 	.sessions {

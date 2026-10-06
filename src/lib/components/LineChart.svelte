@@ -21,7 +21,6 @@
 	let width = $state(600);
 	let active = $state<number | null>(null);
 
-	const pad = { top: 22, right: 16, bottom: 28, left: 52 };
 	const dateFmt = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
 
 	/** Clean tick values (1, 2, 2.5, 5 × 10ⁿ) covering the data. */
@@ -41,6 +40,11 @@
 		const out: number[] = [];
 		for (let v = start; v <= end + step / 2; v += step) out.push(Number(v.toFixed(6)));
 		return out;
+	});
+
+	const pad = $derived.by(() => {
+		const widest = Math.max(2, ...ticks.map((t) => formatY(t).length));
+		return { top: 22, right: 8, bottom: 26, left: Math.ceil(widest * 8 + 16) };
 	});
 
 	const plotW = $derived(Math.max(1, width - pad.left - pad.right));
@@ -82,15 +86,43 @@
 					: Math.max(0, Math.min(last, cur + (e.key === 'ArrowLeft' ? -1 : 1)));
 	}
 
+	/** First, last, and the middle date when it won't collide with either end. */
+	const xLabels = $derived.by(() => {
+		if (!points.length) return [];
+		const idxs = [0];
+		if (points.length > 2) {
+			const mid = Math.floor((points.length - 1) / 2);
+			const midX = coords[mid].cx;
+			if (midX - coords[0].cx > 72 && coords.at(-1)!.cx - midX > 72) idxs.push(mid);
+		}
+		if (points.length > 1) idxs.push(points.length - 1);
+		return idxs;
+	});
+
+	const showDot = (i: number) =>
+		points[i].highlight ||
+		active === i ||
+		i === 0 ||
+		i === points.length - 1 ||
+		points.length <= 14;
+
 	const valueText = $derived.by(() => {
 		const p = points[active ?? points.length - 1];
 		return `${dateFmt.format(p.date)}: ${p.lines.join(', ')}${p.highlight ? ', personal record' : ''}`;
 	});
 
-	const tip = $derived(active === null ? null : { ...points[active], ...coords[active] });
+	const current = $derived(points[active ?? points.length - 1]);
+	const tip = $derived(active === null ? null : coords[active]);
 </script>
 
 <div class="chart" bind:clientWidth={width}>
+	<div class="readout" aria-hidden="true">
+		<strong>{current.lines[0]}</strong>
+		{#each current.lines.slice(1) as line (line)}<span>{line}</span>{/each}
+		<span class="date"
+			>{dateFmt.format(current.date)}{current.highlight ? ' · personal record' : ''}</span
+		>
+	</div>
 	<svg
 		viewBox="0 0 {width} {height}"
 		{height}
@@ -113,13 +145,16 @@
 				>{formatY(t)}</text
 			>
 		{/each}
-		<text class="axis" x={coords[0].cx} y={height - 8} text-anchor="start"
-			>{dateFmt.format(points[0].date)}</text
-		>
-		{#if points.length > 1}
-			<text class="axis" x={coords.at(-1)!.cx} y={height - 8} text-anchor="end"
-				>{dateFmt.format(points.at(-1)!.date)}</text
+		{#each xLabels as i (i)}
+			<text
+				class="axis"
+				x={coords[i].cx}
+				y={height - 6}
+				text-anchor={i === 0 ? 'start' : i === points.length - 1 ? 'end' : 'middle'}
+				>{dateFmt.format(points[i].date)}</text
 			>
+		{/each}
+		{#if points.length > 1}
 			<path class="area" d={areaPath} />
 			<path class="line" d={linePath} />
 		{/if}
@@ -129,33 +164,20 @@
 		{/if}
 
 		{#each coords as c, i (i)}
-			<circle
-				class="dot"
-				class:pr={points[i].highlight}
-				cx={c.cx}
-				cy={c.cy}
-				r={points[i].highlight ? 6 : 4}
-			/>
+			{#if showDot(i)}
+				<circle
+					class="dot"
+					class:pr={points[i].highlight}
+					cx={c.cx}
+					cy={c.cy}
+					r={points[i].highlight ? 6 : active === i ? 5 : 4}
+				/>
+			{/if}
 			{#if points[i].highlight}
 				<text class="pr-label" x={c.cx} y={c.cy - 12} text-anchor="middle">PR</text>
 			{/if}
 		{/each}
 	</svg>
-
-	{#if tip}
-		<div
-			class="tooltip"
-			style:left="{(tip.cx / width) * 100}%"
-			style:top="{tip.cy}px"
-			class:flip={tip.cx > width * 0.65}
-			aria-hidden="true"
-		>
-			<strong>{tip.lines[0]}</strong>
-			{#each tip.lines.slice(1) as line (line)}<span>{line}</span>{/each}
-			<span class="date">{dateFmt.format(tip.date)}{tip.highlight ? ' · personal record' : ''}</span
-			>
-		</div>
-	{/if}
 </div>
 
 <style>
@@ -225,32 +247,24 @@
 		stroke-width: 1;
 	}
 
-	.tooltip {
-		position: absolute;
-		transform: translate(12px, -50%);
+	.readout {
 		display: flex;
-		flex-direction: column;
-		gap: 2px;
-		min-width: 120px;
-		padding: 8px 10px;
-		border-radius: 8px;
-		background: var(--panel);
-		border: 1px solid var(--line);
-		box-shadow: 0 6px 18px rgb(0 0 0 / 0.12);
-		font-size: 13px;
-		pointer-events: none;
-		white-space: nowrap;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: 4px 12px;
+		min-height: 32px;
+		margin-bottom: 4px;
+		font-variant-numeric: tabular-nums;
 	}
 
-	.tooltip.flip {
-		transform: translate(calc(-100% - 12px), -50%);
-	}
-
-	.tooltip strong {
-		font-size: 15px;
+	.readout strong {
+		font-size: 22px;
+		font-weight: 600;
+		letter-spacing: -0.02em;
 	}
 
 	.date {
 		color: var(--ink-2);
+		font-size: 14px;
 	}
 </style>

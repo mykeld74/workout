@@ -21,6 +21,8 @@
 		menuOpen = false;
 	});
 
+	const wide = $derived(page.url.pathname === '/progress');
+
 	const links = [
 		{ href: '/', label: 'Plan' },
 		{ href: '/progress', label: 'Progress' },
@@ -43,7 +45,7 @@
 <svelte:window onkeydown={(e) => e.key === 'Escape' && (menuOpen = false)} />
 
 {#if data.user}
-	<header class:open={menuOpen}>
+	<header class:open={menuOpen} class:wide>
 		<a class="brand" href="/">PUSH / PULL</a>
 		<button
 			type="button"
@@ -68,7 +70,7 @@
 	</header>
 {/if}
 
-<main>
+<main class:wide>
 	{@render children()}
 </main>
 
@@ -131,6 +133,11 @@
 		max-width: 760px;
 		margin: 0 auto;
 		padding: 20px 16px 64px;
+	}
+
+	header.wide,
+	main.wide {
+		max-width: 1120px;
 	}
 
 	@media (max-width: 640px) {
