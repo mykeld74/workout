@@ -4,7 +4,7 @@ import { db } from '#lib/server/db/index.ts';
 import { healthKey, healthSample } from '#lib/server/db/schema.ts';
 import { parsePayload } from '#lib/health-payload.ts';
 import { undoubleSteps } from '#lib/workout/activity.ts';
-import { restingBpmByDay } from '#lib/workout/heart.ts';
+import { AWAKE_END, AWAKE_START, MIN_SAMPLES, RESTING_PERCENTILE } from '#lib/workout/heart.ts';
 
 /**
  * Samsung Health → Health Connect → the "Health Connect Webhook" phone app → POST /api/health.
@@ -163,9 +163,8 @@ export interface Readiness {
 export async function readiness(userId: string, timeZone = 'UTC'): Promise<Readiness> {
 	const now = Date.now();
 	const since = new Date(now - 15 * DAY_MS);
-	const [hr, exercise, hrv] = await Promise.all([
-		samples(userId, 'heart_rate', since),
-		samples(userId, 'exercise', since),
+	const [resting, hrv] = await Promise.all([
+		restingDays(userId, timeZone, since),
 		samples(userId, 'hrv', since)
 	]);
 
@@ -178,9 +177,7 @@ export async function readiness(userId: string, timeZone = 'UTC'): Promise<Readi
 		return { today: Math.round(today), baseline: Math.round(baseline) };
 	};
 
-	const r = compare(
-		restingTrendFrom(hr, exercise, timeZone).map((d) => ({ time: d.date, value: d.value }))
-	);
+	const r = compare(resting.map((d) => ({ time: d.date, value: d.value })));
 	const h = compare(hrv);
 	if (!r && !h) {
 		return {
@@ -335,24 +332,44 @@ export async function dailyTrend(userId: string, metric: 'hrv') {
 	}));
 }
 
-function restingTrendFrom(
-	hr: { time: Date; value: number }[],
-	exercise: { time: Date; end: Date | null }[],
-	timeZone: string
-) {
-	return restingBpmByDay(
-		hr,
-		exercise.flatMap((e) => (e.end ? [{ time: e.time, end: e.end }] : [])),
-		timeZone
-	).map((d) => ({ date: new Date(`${d.day}T12:00:00Z`), value: d.value }));
+/**
+ * Resting heart rate per local day since a date: the 10th percentile of awake (7:00–22:00),
+ * non-workout readings, on days with at least 20 of them (rules in heart.ts). Worked out by
+ * the database, so one number per day comes back instead of thousands of readings.
+ */
+async function restingDays(userId: string, timeZone: string, since: Date) {
+	// Times are stored as UTC without a zone; shift them into the user's zone for days and hours.
+	const result = await db.execute<{ day: string; value: number }>(sql`
+		select local::date::text as day,
+			percentile_cont(${RESTING_PERCENTILE}) within group (order by value) as value
+		from (
+			select h.value, (h.start_time at time zone 'UTC') at time zone ${timeZone} as local
+			from health_sample h
+			where h.user_id = ${userId}
+				and h.metric = 'heart_rate'
+				and h.start_time >= (${since.toISOString()}::timestamptz at time zone 'UTC')
+				and not exists (
+					select 1 from health_sample e
+					where e.user_id = h.user_id
+						and e.metric = 'exercise'
+						and coalesce(e.detail->>'ignored', '') <> 'true'
+						and h.start_time between e.start_time and e.end_time
+				)
+		) r
+		where extract(hour from local) * 60 + extract(minute from local) >= ${AWAKE_START}
+			and extract(hour from local) * 60 + extract(minute from local) < ${AWAKE_END}
+		group by 1
+		having count(*) >= ${MIN_SAMPLES}
+		order by 1
+	`);
+	return result.rows.map((r) => ({
+		date: new Date(`${r.day}T12:00:00Z`),
+		value: Math.round(Number(r.value))
+	}));
 }
 
 /** Resting heart rate per local day for the last 90 days, from awake readings. */
 export async function restingTrend(userId: string, timeZone: string) {
 	const since = new Date(Date.now() - 90 * DAY_MS);
-	const [hr, exercise] = await Promise.all([
-		samples(userId, 'heart_rate', since),
-		samples(userId, 'exercise', since)
-	]);
-	return restingTrendFrom(hr, exercise, timeZone);
+	return restingDays(userId, timeZone, since);
 }

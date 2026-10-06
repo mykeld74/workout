@@ -10,14 +10,18 @@ export interface DayTotal {
 
 const FULL_DAY_MS = 20 * 60 * 60 * 1000;
 
-/** A normal step. Shorter than this, for the same distance, means the count is inflated. */
-const NORMAL_STEP_M = 0.76;
 /**
- * At or under this the phone and the watch each contributed the whole interval
- * (about half a real step). Halving is right. Between this and a normal step,
- * they only overlap part of the interval, so halving goes too low.
+ * Health Connect's daily step total adds the phone and the watch together. Against Samsung
+ * Health's own counts (Sep 30 and Oct 3–5, 2026) it was 1.82–1.92× too high: not 2×, because
+ * the phone records fewer steps than the watch. Dividing by the median ratio came within 1–3%
+ * of Samsung on each day (vs 4–9% for halving). Recalibrate if the phone/watch habits change.
  */
-const FULL_DOUBLE_M = 0.45;
+export const DOUBLE_COUNT_FACTOR = 1.865;
+/**
+ * Distance ÷ steps for one source is a real step (0.6–0.75 m for you). Two sources added
+ * together roughly halve it (about 0.35 m). Below this, the total is double counted.
+ */
+const DOUBLED_STRIDE_M = 0.55;
 
 export interface Span {
 	time: Date;
@@ -33,19 +37,17 @@ function sameSpan(a: Span, b: Span): boolean {
 }
 
 /**
- * Health Connect's daily total adds the phone and the watch. When they both cover the
- * whole interval the count is about double; when they overlap only partly it lands in
- * between. Match the distance to a normal step in that in-between case. No distance,
- * or a stride that is already normal, leaves the count as recorded.
+ * Undoes the phone + watch double count on step records. A record whose distance shows a
+ * normal step length is a single source and is left as recorded; one with a too-short step
+ * is divided by the calibrated factor. Without a matching distance, nothing can be told, so
+ * the count is left as is.
  */
 export function undoubleSteps(steps: Span[], distances: Span[]): Span[] {
 	return steps.map((s) => {
 		const meters = distances.find((d) => sameSpan(d, s))?.value;
 		if (!meters || s.value <= 0) return s;
-		const stride = meters / s.value;
-		if (stride >= NORMAL_STEP_M) return s;
-		if (stride <= FULL_DOUBLE_M) return { ...s, value: s.value / 2 };
-		return { ...s, value: meters / NORMAL_STEP_M };
+		if (meters / s.value >= DOUBLED_STRIDE_M) return s;
+		return { ...s, value: s.value / DOUBLE_COUNT_FACTOR };
 	});
 }
 

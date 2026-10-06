@@ -12,13 +12,16 @@ import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 	const userId = locals.user!.id;
+	// Readiness doesn't depend on the session, so start it alongside instead of after.
+	const ready = readiness(userId, safeTimeZone(cookies.get('tz')));
+	ready.catch(() => {}); // a finished session never awaits it
 	const data = await getSession(userId, Number(params.id));
 	if (!data) error(404, 'Session not found');
 	const { completedAt, startedAt } = data.session;
 	return {
 		...data,
 		// Before: should today be easier? After: what the watch recorded during the workout.
-		readiness: completedAt ? null : await readiness(userId, safeTimeZone(cookies.get('tz'))),
+		readiness: completedAt ? null : await ready,
 		vitals: completedAt ? await workoutVitals(userId, startedAt, completedAt) : null
 	};
 };

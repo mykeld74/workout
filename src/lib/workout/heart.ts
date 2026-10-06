@@ -2,10 +2,12 @@
 import { localParts } from './body-weight.ts';
 
 /** Awake hours. The overnight minimum is a sleep low, not a resting rate. */
-const AWAKE_START = 7 * 60;
-const AWAKE_END = 22 * 60;
+export const AWAKE_START = 7 * 60;
+export const AWAKE_END = 22 * 60;
 /** Below this, one quiet spell would stand in for the day. */
-const MIN_SAMPLES = 20;
+export const MIN_SAMPLES = 20;
+/** The resting rate is this percentile of awake, non-workout readings. */
+export const RESTING_PERCENTILE = 0.1;
 
 export interface RestingDay {
 	/** Local calendar day, "2026-10-06". */
@@ -14,7 +16,8 @@ export interface RestingDay {
 }
 
 /**
- * One resting rate per day: the 10th percentile of heart rate while up, outside workouts.
+ * One resting rate per day (the server computes the same thing in SQL, see `restingDays` in
+ * health.ts; this version is handy for testing): the 10th percentile of heart rate while up, outside workouts.
  * Health Connect's resting-heart-rate record is the lowest beat of the day, below the
  * rate Samsung Health shows while you are up.
  */
@@ -34,7 +37,7 @@ export function restingBpmByDay(
 	}
 	return [...byDay.entries()]
 		.filter(([, values]) => values.length >= MIN_SAMPLES)
-		.map(([day, values]) => ({ day, value: Math.round(percentile(values, 0.1)) }))
+		.map(([day, values]) => ({ day, value: Math.round(percentile(values, RESTING_PERCENTILE)) }))
 		.sort((a, b) => a.day.localeCompare(b.day));
 }
 

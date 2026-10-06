@@ -65,6 +65,16 @@
 		};
 	});
 
+	// Sets saved during this visit. Shown straight away instead of reloading the whole page
+	// after every Done (each reload is several round-trips to the database).
+	let saved = $state<Record<string, Log>>({});
+	const setKey = (workoutExerciseId: number, setNumber: number) =>
+		`${workoutExerciseId}:${setNumber}`;
+	$effect.pre(() => {
+		void data.session.id;
+		saved = {};
+	});
+
 	/** Logged sets keyed by workout exercise, then set number, including ones waiting to sync. */
 	const logsByItem = $derived.by(() => {
 		const byItem: Record<number, Record<number, Log>> = {};
@@ -72,6 +82,11 @@
 			if (log.workoutExerciseId === null) continue;
 			byItem[log.workoutExerciseId] ??= {};
 			byItem[log.workoutExerciseId][log.setNumber] = log;
+		}
+		for (const [key, log] of Object.entries(saved)) {
+			const [id, n] = key.split(':').map(Number);
+			byItem[id] ??= {};
+			byItem[id][n] = log;
 		}
 		for (const p of pending) {
 			byItem[p.workoutExerciseId] ??= {};
@@ -340,6 +355,11 @@
 							if (rest) timer = { label: 'Rest', seconds: rest, key: Date.now() };
 							return;
 						}
+						// Show it as logged now; the save finishes in the background.
+						const key = setKey(item.id, setNumber);
+						const before = saved[key];
+						const entered = asPending();
+						saved[key] = { weight: entered.weight, reps: entered.reps };
 						let started: number | null = null;
 						if (rest) {
 							started = Date.now();
@@ -356,11 +376,14 @@
 								pending = readPending().filter((p) => p.sessionId === data.session.id);
 								return;
 							}
-							await update({ reset: false });
-							// The set didn't save: drop the timer we started for it.
-							if (result.type !== 'success' && started !== null && timer?.key === started) {
-								timer = null;
+							if (result.type !== 'success') {
+								// The set didn't save: undo the early display and the timer we started.
+								if (before) saved[key] = before;
+								else delete saved[key];
+								if (started !== null && timer?.key === started) timer = null;
 							}
+							// Saved: nothing else on the page changed, so don't reload it all.
+							await update({ reset: false, refreshAll: false });
 						};
 					}}
 				>

@@ -72,9 +72,26 @@ export function ensureCatalog(): Promise<void> {
 	return catalogReady;
 }
 
-export async function loadPool(): Promise<ExerciseDef[]> {
-	await ensureCatalog();
-	return (await db.select().from(exercise)) as ExerciseDef[];
+const POOL_TTL_MS = 10 * 60 * 1000;
+let pool: { at: number; rows: Promise<ExerciseDef[]> } | undefined;
+
+/**
+ * Every exercise (~900 with imports). Cached for 10 minutes because it rarely changes and is
+ * large; `clearPool()` drops the cache after an import.
+ */
+export function loadPool(): Promise<ExerciseDef[]> {
+	if (!pool || Date.now() - pool.at > POOL_TTL_MS) {
+		const rows = ensureCatalog().then(
+			async () => (await db.select().from(exercise)) as ExerciseDef[]
+		);
+		rows.catch(() => (pool = undefined));
+		pool = { at: Date.now(), rows };
+	}
+	return pool.rows;
+}
+
+export function clearPool() {
+	pool = undefined;
 }
 
 // ─── Profile and exercise preferences ────────────────────────────────────────
@@ -113,7 +130,11 @@ export async function setPref(
 
 /** The profile plus the user's starred and hidden exercises, ready for the generator. */
 export async function getProfile(userId: string): Promise<StoredProfile | undefined> {
-	const [row] = await db.select().from(profileTable).where(eq(profileTable.userId, userId));
+	// Both at once: each query is a round-trip to the database.
+	const [[row], prefs] = await Promise.all([
+		db.select().from(profileTable).where(eq(profileTable.userId, userId)),
+		getPrefs(userId)
+	]);
 	if (!row) return undefined;
 	return {
 		birthDate: row.birthDate,
@@ -122,7 +143,7 @@ export async function getProfile(userId: string): Promise<StoredProfile | undefi
 		experience: row.experience as Experience,
 		powerblock: row.powerblock,
 		weightIncrement: row.weightIncrement,
-		prefs: await getPrefs(userId)
+		prefs
 	};
 }
 
@@ -228,55 +249,55 @@ export async function createProgram(userId: string, profile: Profile) {
 export async function getDashboard(userId: string) {
 	const active = await activeProgramRow(userId);
 	if (!active) return null;
-	const profile = await getProfile(userId);
 
-	const workouts = await db
-		.select()
-		.from(workout)
-		.where(eq(workout.programId, active.id))
-		.orderBy(asc(workout.position));
-
-	const counts = await db
-		.select({
-			workoutId: workoutExercise.workoutId,
-			count: sql<number>`count(*)::int`
-		})
-		.from(workoutExercise)
-		.innerJoin(workout, eq(workout.id, workoutExercise.workoutId))
-		.where(eq(workout.programId, active.id))
-		.groupBy(workoutExercise.workoutId);
-
-	const sessions = await db
-		.select({
-			id: workoutSession.id,
-			workoutId: workoutSession.workoutId,
-			startedAt: workoutSession.startedAt,
-			completedAt: workoutSession.completedAt,
-			title: workout.title,
-			kind: workout.kind
-		})
-		.from(workoutSession)
-		.innerJoin(workout, eq(workout.id, workoutSession.workoutId))
-		.where(eq(workoutSession.userId, userId))
-		.orderBy(desc(workoutSession.startedAt))
-		.limit(20);
-
-	// Everything finished in the last 26 weeks, for the weekly view and streak.
-	const history = await db
-		.select({
-			startedAt: workoutSession.startedAt,
-			completedAt: workoutSession.completedAt,
-			kind: workout.kind
-		})
-		.from(workoutSession)
-		.innerJoin(workout, eq(workout.id, workoutSession.workoutId))
-		.where(
-			and(
-				eq(workoutSession.userId, userId),
-				isNotNull(workoutSession.completedAt),
-				gt(workoutSession.completedAt, new Date(Date.now() - 26 * WEEK_MS))
+	// These only need the plan id, so ask for them all at once (each is a round-trip).
+	const [profile, workouts, counts, sessions, history] = await Promise.all([
+		getProfile(userId),
+		db
+			.select()
+			.from(workout)
+			.where(eq(workout.programId, active.id))
+			.orderBy(asc(workout.position)),
+		db
+			.select({
+				workoutId: workoutExercise.workoutId,
+				count: sql<number>`count(*)::int`
+			})
+			.from(workoutExercise)
+			.innerJoin(workout, eq(workout.id, workoutExercise.workoutId))
+			.where(eq(workout.programId, active.id))
+			.groupBy(workoutExercise.workoutId),
+		db
+			.select({
+				id: workoutSession.id,
+				workoutId: workoutSession.workoutId,
+				startedAt: workoutSession.startedAt,
+				completedAt: workoutSession.completedAt,
+				title: workout.title,
+				kind: workout.kind
+			})
+			.from(workoutSession)
+			.innerJoin(workout, eq(workout.id, workoutSession.workoutId))
+			.where(eq(workoutSession.userId, userId))
+			.orderBy(desc(workoutSession.startedAt))
+			.limit(20),
+		// Everything finished in the last 26 weeks, for the weekly view and streak.
+		db
+			.select({
+				startedAt: workoutSession.startedAt,
+				completedAt: workoutSession.completedAt,
+				kind: workout.kind
+			})
+			.from(workoutSession)
+			.innerJoin(workout, eq(workout.id, workoutSession.workoutId))
+			.where(
+				and(
+					eq(workoutSession.userId, userId),
+					isNotNull(workoutSession.completedAt),
+					gt(workoutSession.completedAt, new Date(Date.now() - 26 * WEEK_MS))
+				)
 			)
-		);
+	]);
 
 	const inProgram = sessions.filter(
 		(s) => s.completedAt && workouts.some((w) => w.id === s.workoutId)
@@ -345,17 +366,22 @@ async function workoutExercises(workoutId: number) {
 }
 
 export async function getWorkout(userId: string, workoutId: number) {
-	const owned = await ownedWorkout(userId, workoutId);
+	// All at once; the profile and pool are only used if the plan is still active.
+	const [owned, exercises, maybeProfile, allExercises] = await Promise.all([
+		ownedWorkout(userId, workoutId),
+		workoutExercises(workoutId),
+		getProfile(userId),
+		loadPool()
+	]);
 	if (!owned) return null;
-	const exercises = await workoutExercises(workoutId);
 	const active = owned.program.archivedAt === null;
 
 	// What each slot could be swapped to, and what could be added, for the editor.
 	const alternatives: Record<number, { id: string; name: string; source: string }[]> = {};
 	let addable: { id: string; name: string; pattern: string; favorite: boolean }[] = [];
-	const profile = active ? await getProfile(userId) : undefined;
+	const profile = active ? maybeProfile : undefined;
 	if (profile) {
-		const pool = await loadPool();
+		const pool = allExercises;
 		const inWorkout = exercises.map((e) => e.exercise.id);
 		for (const { item, exercise: current } of exercises) {
 			alternatives[item.id] = replacementOptions(pool, current as ExerciseDef, inWorkout, profile)
@@ -560,21 +586,31 @@ export async function startSession(userId: string, workoutId: number) {
 type LoggedSet = { weight: number | null; reps: number | null };
 
 export async function getSession(userId: string, sessionId: number) {
-	const [row] = await db
-		.select()
-		.from(workoutSession)
-		.where(and(eq(workoutSession.id, sessionId), eq(workoutSession.userId, userId)));
-	if (!row) return null;
+	// Session, its workout and plan in one query; then everything that only needs the workout id
+	// at once. Each query is a round-trip to the database, so fewer rounds = a faster page.
+	const [[found], profile] = await Promise.all([
+		db
+			.select({ session: workoutSession, workout, program })
+			.from(workoutSession)
+			.innerJoin(workout, eq(workout.id, workoutSession.workoutId))
+			.innerJoin(program, eq(program.id, workout.programId))
+			.where(
+				and(
+					eq(workoutSession.id, sessionId),
+					eq(workoutSession.userId, userId),
+					eq(program.userId, userId)
+				)
+			),
+		getProfile(userId)
+	]);
+	if (!found || !profile) return null;
+	const row = found.session;
+	const owned = { workout: found.workout, program: found.program };
 
-	const owned = await ownedWorkout(userId, row.workoutId);
-	const profile = await getProfile(userId);
-	if (!owned || !profile) return null;
-	const items = await workoutExercises(row.workoutId);
-	const logs = await db
-		.select()
-		.from(setLog)
-		.where(eq(setLog.sessionId, sessionId))
-		.orderBy(asc(setLog.setNumber));
+	const [items, logs] = await Promise.all([
+		workoutExercises(row.workoutId),
+		db.select().from(setLog).where(eq(setLog.sessionId, sessionId)).orderBy(asc(setLog.setNumber))
+	]);
 
 	// Every earlier finished set of these exercises: "last time", next weight and personal records.
 	const exerciseIds = [
@@ -641,28 +677,10 @@ async function summarize(
 ) {
 	const names = new Map(items.map((i) => [i.exercise.id, i.exercise.name]));
 	const missing = logs.map((l) => l.exerciseId).filter((id) => !names.has(id));
-	if (missing.length) {
-		for (const r of await db
-			.select({ id: exercise.id, name: exercise.name })
-			.from(exercise)
-			.where(inArray(exercise.id, missing)))
-			names.set(r.id, r.name);
-	}
 
-	const records: { name: string; weight: number | null; reps: number | null }[] = [];
-	for (const id of new Set(logs.map((l) => l.exerciseId))) {
-		const sets = logs.filter((l) => l.exerciseId === id);
-		const top = sets.reduce((a, b) =>
-			estimatedMax(b.weight, b.reps) > estimatedMax(a.weight, a.reps) ? b : a
-		);
-		// Only a record if there was something to beat.
-		if (id in bestBefore && estimatedMax(top.weight, top.reps) > bestBefore[id]) {
-			records.push({ name: names.get(id) ?? id, weight: top.weight, reps: top.reps });
-		}
-	}
-
-	// The last finished session of the same workout, to compare against.
-	const [last] = await db
+	// The last finished session of the same workout, to compare against (as a subquery, so its
+	// sets come back in the same round-trip).
+	const lastSession = db
 		.select({ id: workoutSession.id })
 		.from(workoutSession)
 		.where(
@@ -675,12 +693,32 @@ async function summarize(
 		)
 		.orderBy(desc(workoutSession.startedAt))
 		.limit(1);
-	const lastLogs = last
-		? await db
-				.select({ weight: setLog.weight, reps: setLog.reps })
-				.from(setLog)
-				.where(eq(setLog.sessionId, last.id))
-		: null;
+	const [missingNames, lastRows] = await Promise.all([
+		missing.length
+			? db
+					.select({ id: exercise.id, name: exercise.name })
+					.from(exercise)
+					.where(inArray(exercise.id, missing))
+			: Promise.resolve([]),
+		db
+			.select({ weight: setLog.weight, reps: setLog.reps })
+			.from(setLog)
+			.where(eq(setLog.sessionId, sql`(${lastSession})`))
+	]);
+	for (const r of missingNames) names.set(r.id, r.name);
+	const lastLogs = lastRows.length ? lastRows : null;
+
+	const records: { name: string; weight: number | null; reps: number | null }[] = [];
+	for (const id of new Set(logs.map((l) => l.exerciseId))) {
+		const sets = logs.filter((l) => l.exerciseId === id);
+		const top = sets.reduce((a, b) =>
+			estimatedMax(b.weight, b.reps) > estimatedMax(a.weight, a.reps) ? b : a
+		);
+		// Only a record if there was something to beat.
+		if (id in bestBefore && estimatedMax(top.weight, top.reps) > bestBefore[id]) {
+			records.push({ name: names.get(id) ?? id, weight: top.weight, reps: top.reps });
+		}
+	}
 
 	return {
 		minutes: Math.max(

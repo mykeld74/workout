@@ -1,4 +1,5 @@
 import { db } from '#lib/server/db/index.ts';
+import { clearPool } from '#lib/server/workouts.ts';
 import { sql } from 'drizzle-orm';
 import { exercise } from '#lib/server/db/schema.ts';
 import type {
@@ -207,5 +208,6 @@ export async function importFreeExerciseDb(): Promise<{ added: number; skipped: 
 			.returning({ inserted: sql<boolean>`xmax = 0` });
 		added += inserted.filter((r) => r.inserted).length;
 	}
+	clearPool();
 	return { added, skipped: data.length - rows.length };
 }
