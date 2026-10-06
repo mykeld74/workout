@@ -7,6 +7,14 @@
 	let { data, children }: LayoutProps = $props();
 	let menuOpen = $state(false);
 
+	// Tell the server this device's time zone, for anything grouped by local day.
+	$effect(() => {
+		const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+		if (tz && !document.cookie.includes(`tz=${encodeURIComponent(tz)}`)) {
+			document.cookie = `tz=${encodeURIComponent(tz)}; path=/; max-age=31536000; samesite=lax`;
+		}
+	});
+
 	// Close the mobile menu whenever the page changes.
 	$effect(() => {
 		void page.url.pathname;

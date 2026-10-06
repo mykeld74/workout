@@ -1,19 +1,43 @@
 <script lang="ts">
+	import { enhance } from '$app/forms';
+	import BarChart from '#lib/components/BarChart.svelte';
 	import LineChart from '#lib/components/LineChart.svelte';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 
 	let selectedId = $state<string | null>(null);
+	let showAllSessions = $state(false);
+	let confirmRemove = $state<number | null>(null);
+
+	const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
+	/** "2026-10-06" → "Oct 6" (a calendar day, so no time zone shift). */
+	const dayLabel = (day: string) =>
+		new Date(`${day}T12:00:00Z`).toLocaleDateString(undefined, {
+			month: 'short',
+			day: 'numeric',
+			timeZone: 'UTC'
+		});
 	const selected = $derived(
 		data.exercises.find((e) => e.id === selectedId) ?? data.exercises[0] ?? null
 	);
 
-	const dateFmt = new Intl.DateTimeFormat(undefined, {
-		month: 'short',
-		day: 'numeric',
-		year: 'numeric'
-	});
+	const timeFmt = $derived(
+		new Intl.DateTimeFormat(undefined, {
+			hour: 'numeric',
+			minute: '2-digit',
+			timeZone: data.timeZone
+		})
+	);
+
+	const dateFmt = $derived(
+		new Intl.DateTimeFormat(undefined, {
+			month: 'short',
+			day: 'numeric',
+			year: 'numeric',
+			timeZone: data.timeZone
+		})
+	);
 
 	/** Weighted exercises chart the estimated max; bodyweight and timed ones chart reps or seconds. */
 	const weighted = $derived(!!selected?.points.some((p) => p.weight));
@@ -167,6 +191,7 @@
 
 <section class="card focus">
 	<h2 class="chart-title">Body weight</h2>
+	<p class="muted small">One reading per day: the one closest to 6:00 AM.</p>
 	{#if data.bodyWeight.length >= 2}
 		<LineChart
 			label="Body weight over time"
@@ -176,18 +201,19 @@
 				value: b.weight,
 				lines: [
 					`${b.weight} lb`,
-					b.source === 'samsung' ? 'From Samsung Health' : 'Entered after a workout'
+					`${timeFmt.format(b.date)} · ${b.source === 'samsung' ? 'Samsung Health' : 'entered after a workout'}`
 				]
 			}))}
 		/>
 		<details>
 			<summary>Show as table</summary>
 			<table>
-				<thead><tr><th>Date</th><th>Body weight</th><th>Source</th></tr></thead>
+				<thead><tr><th>Date</th><th>Time</th><th>Body weight</th><th>Source</th></tr></thead>
 				<tbody>
 					{#each [...data.bodyWeight].reverse() as b (b.date.getTime())}
 						<tr>
 							<td>{dateFmt.format(b.date)}</td>
+							<td>{timeFmt.format(b.date)}</td>
 							<td>{b.weight} lb</td>
 							<td>{b.source === 'samsung' ? 'Samsung Health' : 'Workout'}</td>
 						</tr>
@@ -203,6 +229,179 @@
 		</p>
 	{/if}
 </section>
+
+{#if data.activity.hasData}
+	<section class="activity">
+		<h2>Activity</h2>
+		<p class="muted small">From Samsung Health via your phone and Galaxy Watch.</p>
+
+		<div class="card focus">
+			<h3 class="chart-title">Steps per day</h3>
+			<p class="muted small">
+				Last 30 days · average {Math.round(
+					avg(data.activity.steps.filter((d) => d.value > 0).map((d) => d.value))
+				).toLocaleString()} on days with data
+			</p>
+			<BarChart
+				label="Steps per day, last 30 days"
+				unit="steps"
+				formatY={(n) => (n >= 1000 ? `${Math.round(n / 100) / 10}k` : `${Math.round(n)}`)}
+				categories={data.activity.steps.map((d) => dayLabel(d.day))}
+				series={[
+					{
+						key: 'steps',
+						label: 'Steps',
+						color: 'var(--chart)',
+						values: data.activity.steps.map((d) => d.value)
+					}
+				]}
+			/>
+			<details>
+				<summary>Show as table</summary>
+				<table>
+					<thead><tr><th>Day</th><th>Steps</th><th>Workout calories</th></tr></thead>
+					<tbody>
+						{#each [...data.activity.steps].reverse() as d, i (d.day)}
+							{@const cal = data.activity.calories[data.activity.calories.length - 1 - i]}
+							<tr>
+								<td>{dayLabel(d.day)}</td>
+								<td>{d.value ? d.value.toLocaleString() : '—'}</td>
+								<td>{cal?.value ? cal.value.toLocaleString() : '—'}</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</details>
+		</div>
+
+		<div class="card focus">
+			<h3 class="chart-title">Workout calories per day</h3>
+			<p class="muted small">
+				Last 30 days · calories burned in your watch workouts, as Samsung Health counts them
+			</p>
+			<BarChart
+				label="Workout calories per day, last 30 days"
+				unit="cal"
+				formatY={(n) => `${Math.round(n).toLocaleString()}`}
+				categories={data.activity.calories.map((d) => dayLabel(d.day))}
+				series={[
+					{
+						key: 'calories',
+						label: 'Workout calories',
+						color: 'var(--chart)',
+						values: data.activity.calories.map((d) => d.value)
+					}
+				]}
+			/>
+		</div>
+
+		<div class="card focus">
+			<h3 class="chart-title">Workout minutes per week</h3>
+			<p class="muted small">
+				Last 12 weeks, from your watch. Lifting = strength or circuit sessions, plus unlabeled
+				sessions that overlap a workout logged here.
+			</p>
+			<BarChart
+				label="Workout minutes per week, lifting and cardio, last 12 weeks"
+				formatY={(n) => `${Math.round(n)}`}
+				categories={data.activity.weeks.map((w) => `Wk of ${dayLabel(w.week)}`)}
+				series={[
+					{
+						key: 'lifting',
+						label: 'Lifting',
+						color: 'var(--chart-lift)',
+						values: data.activity.weeks.map((w) => w.lifting)
+					},
+					{
+						key: 'cardio',
+						label: 'Cardio',
+						color: 'var(--chart-cardio)',
+						values: data.activity.weeks.map((w) => w.cardio)
+					}
+				]}
+			/>
+			<details>
+				<summary>Show as table</summary>
+				<table>
+					<thead><tr><th>Week of</th><th>Lifting</th><th>Cardio</th><th>Total</th></tr></thead>
+					<tbody>
+						{#each [...data.activity.weeks].reverse() as w (w.week)}
+							<tr>
+								<td>{dayLabel(w.week)}</td>
+								<td>{w.lifting} min</td>
+								<td>{w.cardio} min</td>
+								<td>{w.lifting + w.cardio} min</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</details>
+		</div>
+
+		{#if data.activity.sessions.length}
+			<div class="card">
+				<h3 class="chart-title">Watch sessions</h3>
+				<ul class="sessions">
+					{#each data.activity.sessions.slice(0, showAllSessions ? undefined : 10) as s (s.time.getTime())}
+						<li>
+							<span class="kind-dot {s.kind}" aria-hidden="true"></span>
+							<span class="s-name">{s.name}</span>
+							<span class="muted"
+								>{dayLabel(s.day)} · {timeFmt.format(s.time)} · {s.minutes} min{s.miles
+									? ` · ${s.miles} mi`
+									: ''}{s.calories ? ` · ${s.calories} cal` : ''}</span
+							>
+							<span class="s-kind">{s.kind === 'lifting' ? 'Lifting' : 'Cardio'}</span>
+							{#if s.id}
+								<div class="s-remove">
+									{#if confirmRemove === s.id}
+										<form
+											method="post"
+											action="?/removeSession"
+											use:enhance={() =>
+												async ({ update }) => {
+													await update({ reset: false });
+													confirmRemove = null;
+												}}
+										>
+											<input type="hidden" name="id" value={s.id} />
+											<span
+												>Remove this session? It won't count anywhere, even if your phone sends it
+												again.</span
+											>
+											<button class="btn small danger">Remove</button>
+											<button
+												type="button"
+												class="btn ghost small"
+												onclick={() => (confirmRemove = null)}>Keep</button
+											>
+										</form>
+									{:else}
+										<button
+											type="button"
+											class="linkish"
+											onclick={() => (confirmRemove = s.id ?? null)}
+											>Remove<span class="sr-only"> {s.name} on {dayLabel(s.day)}</span></button
+										>
+									{/if}
+								</div>
+							{/if}
+						</li>
+					{/each}
+				</ul>
+				{#if data.activity.sessions.length > 10}
+					<button
+						type="button"
+						class="btn ghost small"
+						onclick={() => (showAllSessions = !showAllSessions)}
+					>
+						{showAllSessions ? 'Show fewer' : `Show all ${data.activity.sessions.length}`}
+					</button>
+				{/if}
+			</div>
+		{/if}
+	</section>
+{/if}
 
 {#each [{ title: 'Resting heart rate', unit: 'bpm', rows: data.restingHr, note: 'Lower over time usually means better fitness.' }, { title: 'Heart rate variability', unit: 'ms', rows: data.hrv, note: 'Higher usually means better recovered.' }] as m (m.title)}
 	{#if m.rows.length >= 2}
@@ -293,6 +492,97 @@
 	.chart-title {
 		font: 600 17px/1.3 var(--body);
 		margin: 4px 0 0;
+	}
+
+	.activity {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+	}
+
+	.activity > h2 {
+		margin-bottom: 0;
+	}
+
+	.activity > p {
+		margin-top: -8px;
+	}
+
+	.sessions {
+		list-style: none;
+		margin: 8px 0;
+		padding: 0;
+	}
+
+	.sessions li {
+		display: grid;
+		grid-template-columns: 12px 1fr auto;
+		grid-template-areas: 'dot name kind' '. meta meta' '. remove remove';
+		align-items: center;
+		gap: 2px 10px;
+		padding: 8px 0;
+		border-bottom: 1px solid var(--line);
+		font-size: 15px;
+	}
+
+	.sessions .muted {
+		grid-area: meta;
+		font-size: 14px;
+	}
+
+	.s-name {
+		grid-area: name;
+		font-weight: 600;
+	}
+
+	.s-kind {
+		grid-area: kind;
+		font-size: 13px;
+		font-weight: 600;
+		color: var(--ink-2);
+	}
+
+	.s-remove {
+		grid-area: remove;
+	}
+
+	.s-remove form {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 8px;
+		margin-top: 4px;
+	}
+
+	.linkish {
+		background: none;
+		border: none;
+		padding: 0;
+		min-height: 32px;
+		font: inherit;
+		font-size: 14px;
+		color: var(--ink-2);
+		text-decoration: underline;
+		cursor: pointer;
+	}
+
+	.danger {
+		--accent: var(--danger);
+	}
+
+	.kind-dot {
+		grid-area: dot;
+		width: 10px;
+		height: 10px;
+		border-radius: 50%;
+	}
+
+	.kind-dot.lifting {
+		background: var(--chart-lift);
+	}
+
+	.kind-dot.cardio {
+		background: var(--chart-cardio);
 	}
 
 	.single {

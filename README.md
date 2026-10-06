@@ -31,9 +31,10 @@ The starting point is the original Push/Pull workout sheets: a 4-day Push A → 
 - **Exercise library** — search and filter by movement, source and "fits my gear". **Star** exercises to have them picked more often, or **Never show** to keep them out of plans, swaps and the add list. **Import** pulls ~800 strength and stretching exercises (with instructions and start/finish photos) from the public-domain [Free Exercise DB](https://github.com/yuhonas/free-exercise-db). Re-running it adds anything new and refreshes photos without duplicates.
 - **Samsung Health** (`/health`, linked from Profile) — Galaxy Watch and phone data arrives through Health Connect and the open-source [Health Connect Webhook](https://github.com/mcnaveen/health-connect-webhook) app, which posts to `POST /api/health` with an `Authorization: Bearer <key>` header (keys are made on `/health`; only a hash is stored). It powers:
   - a daily **readiness** note: resting heart rate 5+ bpm above, or HRV 15%+ below, your 14-day normal suggests an easier session;
-  - **heart rate and active calories** in each workout summary;
+  - **heart rate and calories** in each workout summary, from the overlapping watch session (heart rate averaged over the watch session, so a workout left open in the app doesn't dilute it);
   - **steps per day and cardio sessions** in the weekly view;
-  - **body weight** merged into the Progress chart, plus **resting heart rate** and **HRV** trends.
+  - **body weight** merged into the Progress chart (one reading per day, the one closest to 6:00 AM local time), plus **resting heart rate** and **HRV** trends;
+  - an **Activity** section on Progress: steps and workout calories per day (30 days; the calories of each watch workout added up, matching Samsung Health), watch workout minutes per week split into lifting and cardio (12 weeks), and a list of watch sessions. Whole-day totals and overlapping partial records are never added together, and Health Connect's numeric workout types are translated to names (Samsung's Circuit Training arrives as strength training).
 - **Accounts** — email and password sign-in via Better Auth. Every page except `/login` (and `/api/health`, which checks its own key) requires a signed-in user.
 
 ## Tech stack

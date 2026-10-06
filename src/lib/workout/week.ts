@@ -72,13 +72,63 @@ export function summarizeWeek(
 }
 
 export interface Activity {
-	steps: { time: Date; count: number }[];
+	steps: { time: Date; end?: Date | null; count: number }[];
 	exercise: { time: Date; minutes: number; type: string | null; distanceMeters: number | null }[];
 }
 
-/** Watch workout types that are lifting, not cardio. */
+/**
+ * Health Connect's exercise type numbers (androidx ExerciseSessionRecord.EXERCISE_TYPE_*), for the
+ * ones a home lifter is likely to log. The webhook app sends some types as these numbers.
+ */
+const EXERCISE_TYPES: Record<string, string> = {
+	'0': 'OTHER_WORKOUT',
+	'8': 'BIKING',
+	'9': 'BIKING_STATIONARY',
+	'10': 'BOOT_CAMP',
+	'13': 'CALISTHENICS',
+	'25': 'ELLIPTICAL',
+	'26': 'EXERCISE_CLASS',
+	'36': 'HIGH_INTENSITY_INTERVAL_TRAINING',
+	'37': 'HIKING',
+	'48': 'PILATES',
+	'53': 'ROWING',
+	'54': 'ROWING_MACHINE',
+	'56': 'RUNNING',
+	'57': 'RUNNING_TREADMILL',
+	'68': 'STAIR_CLIMBING',
+	'69': 'STAIR_CLIMBING_MACHINE',
+	'70': 'STRENGTH_TRAINING',
+	'71': 'STRETCHING',
+	'74': 'SWIMMING_POOL',
+	'79': 'WALKING',
+	'81': 'WEIGHTLIFTING',
+	'83': 'YOGA'
+};
+
+/** The type as a name: "57" → "RUNNING_TREADMILL"; names pass through. */
+function typeName(type: string | null): string | null {
+	if (!type) return null;
+	return EXERCISE_TYPES[type] ?? type;
+}
+
+/** Watch workout types that are lifting, not cardio. (Samsung's Circuit Training arrives as strength training.) */
 export function isLiftingType(type: string | null): boolean {
-	return !!type && /strength|weight|calisthenic|circuit/i.test(type);
+	const name = typeName(type);
+	return !!name && /strength|weight|calisthenic|circuit/i.test(name);
+}
+
+/** No specific type ("Other workout", unknown numbers): could be anything, including a lift. */
+export function isGenericType(type: string | null): boolean {
+	const name = typeName(type);
+	return !name || name === 'OTHER_WORKOUT' || /^\d+$/.test(name) || /^workout$/i.test(name);
+}
+
+/** Lifting by type, or a generic session that overlaps a workout logged here. Named cardio stays cardio. */
+export function isLiftingSession(
+	s: { time: Date; minutes: number; type: string | null },
+	logged: Finished[]
+): boolean {
+	return isLiftingType(s.type) || (isGenericType(s.type) && overlapsLoggedLift(s, logged));
 }
 
 /** Watch workouts that overlap a workout logged here (give or take 15 min) are that lift. */
@@ -98,11 +148,16 @@ export function overlapsLoggedLift(
 	);
 }
 
-/** "BIKING_STATIONARY" → "Biking stationary"; numeric or missing types → "Workout". */
+/** "BIKING_STATIONARY" or "9" → "Biking stationary"; unknown or missing types → "Workout". */
 export function exerciseName(type: string | null): string {
-	if (!type || /^\d+$/.test(type)) return 'Workout';
-	const words = type
+	const name = typeName(type);
+	if (!name || /^\d+$/.test(name) || name === 'OTHER_WORKOUT') return 'Workout';
+	// Health Connect has no treadmill-walking type; Samsung sends treadmill walks as this.
+	if (name.replace(/^EXERCISE_TYPE_/, '') === 'RUNNING_TREADMILL') return 'Walking (treadmill)';
+	const words = name
 		.replace(/^EXERCISE_TYPE_/, '')
+		.replace('HIGH_INTENSITY_INTERVAL_TRAINING', 'HIIT')
+		.replace('_TREADMILL', ' (treadmill)')
 		.replace(/_/g, ' ')
 		.toLowerCase();
 	return words.charAt(0).toUpperCase() + words.slice(1);
@@ -123,16 +178,20 @@ export function summarizeActivity(
 ): ActivitySummary {
 	const monday = mondayOf(now);
 	const steps = activity.steps.filter((s) => s.time >= monday && s.time <= now);
-	const days = new Set(steps.map((s) => s.time.toDateString())).size;
-	const total = steps.reduce((sum, s) => sum + s.count, 0);
+	// Per day, a whole-day total or the partial records, whichever is larger (never both).
+	const perDay = new Map<string, { full: number; partial: number }>();
+	for (const s of steps) {
+		const key = s.time.toDateString();
+		const d = perDay.get(key) ?? { full: 0, partial: 0 };
+		const isFull = !!s.end && s.end.getTime() - s.time.getTime() >= 20 * 60 * 60 * 1000;
+		if (isFull) d.full += s.count;
+		else d.partial += s.count;
+		perDay.set(key, d);
+	}
+	const days = perDay.size;
+	const total = [...perDay.values()].reduce((sum, d) => sum + Math.max(d.full, d.partial), 0);
 	const cardio = activity.exercise
-		.filter(
-			(e) =>
-				e.time >= monday &&
-				e.time <= now &&
-				!isLiftingType(e.type) &&
-				!overlapsLoggedLift(e, history)
-		)
+		.filter((e) => e.time >= monday && e.time <= now && !isLiftingSession(e, history))
 		.map((e) => ({
 			name: exerciseName(e.type),
 			minutes: e.minutes,

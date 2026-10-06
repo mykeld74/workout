@@ -69,12 +69,29 @@ export async function ingest(userId: string, body: Json): Promise<number> {
 				set: {
 					value: sql`excluded.value`,
 					endTime: sql`excluded.end_time`,
-					detail: sql`excluded.detail`,
+					// A session the user removed stays removed when the phone sends it again.
+					detail: sql`case when ${sql.raw('"health_sample"."detail"')}->>'ignored' = 'true' then ${sql.raw('"health_sample"."detail"')} else excluded.detail end`,
 					receivedAt: new Date()
 				}
 			});
 	}
 	return rows.length;
+}
+
+/** Hides a watch session everywhere; it stays hidden if the phone sends it again. */
+export async function ignoreSession(userId: string, id: number) {
+	await db
+		.update(healthSample)
+		.set({
+			detail: sql`coalesce(${healthSample.detail}, '{}'::jsonb) || '{"ignored": true}'::jsonb`
+		})
+		.where(
+			and(
+				eq(healthSample.id, id),
+				eq(healthSample.userId, userId),
+				eq(healthSample.metric, 'exercise')
+			)
+		);
 }
 
 export async function deleteHealthData(userId: string) {
@@ -97,9 +114,13 @@ export async function metricCounts(userId: string) {
 	return rows.map((r) => ({ ...r, latest: new Date(`${r.latest.replace(' ', 'T')}Z`) }));
 }
 
+/** Readings the user hasn't removed. */
+const notIgnored = sql`coalesce(${healthSample.detail}->>'ignored', '') <> 'true'`;
+
 async function samples(userId: string, metric: Metric, since: Date, until = new Date()) {
 	return db
 		.select({
+			id: healthSample.id,
 			time: healthSample.startTime,
 			end: healthSample.endTime,
 			value: healthSample.value,
@@ -111,7 +132,8 @@ async function samples(userId: string, metric: Metric, since: Date, until = new 
 				eq(healthSample.userId, userId),
 				eq(healthSample.metric, metric),
 				gte(healthSample.startTime, since),
-				lte(healthSample.startTime, until)
+				lte(healthSample.startTime, until),
+				notIgnored
 			)
 		)
 		.orderBy(asc(healthSample.startTime));
@@ -186,15 +208,37 @@ export async function readiness(userId: string): Promise<Readiness> {
 }
 
 /** Heart rate and calories from the watch while a workout was open. */
+/**
+ * Samsung writes a "total calories" record for each watch workout, starting when the workout
+ * starts. Matching those to sessions gives the per-workout calories Samsung Health shows; records
+ * that don't line up with a real session (e.g. stray entries from other apps) are ignored.
+ */
+function caloriesBySession(
+	sessions: { id: number; time: Date }[],
+	totals: { time: Date; value: number }[]
+): Map<number, number> {
+	const out = new Map<number, number>();
+	for (const s of sessions) {
+		const match = totals.find(
+			(c) => Math.abs(c.time.getTime() - s.time.getTime()) <= 2 * 60 * 1000
+		);
+		// Samsung rounds each workout down before adding them up.
+		if (match) out.set(s.id, Math.floor(match.value));
+	}
+	return out;
+}
+
 export async function workoutVitals(userId: string, start: Date, end: Date) {
-	const [hr, active, sessions] = await Promise.all([
-		samples(userId, 'heart_rate', start, end),
-		samples(userId, 'active_calories', new Date(start.getTime() - 5 * 60 * 1000), end),
+	const [hr, totals, sessions] = await Promise.all([
+		samples(userId, 'heart_rate', new Date(start.getTime() - 2 * 60 * 60 * 1000), end),
+		samples(userId, 'total_calories', new Date(start.getTime() - 2 * 60 * 60 * 1000), end),
 		db
 			.select({
+				id: healthSample.id,
 				value: healthSample.value,
 				detail: healthSample.detail,
-				time: healthSample.startTime
+				time: healthSample.startTime,
+				end: healthSample.endTime
 			})
 			.from(healthSample)
 			.where(
@@ -202,35 +246,49 @@ export async function workoutVitals(userId: string, start: Date, end: Date) {
 					eq(healthSample.userId, userId),
 					eq(healthSample.metric, 'exercise'),
 					lt(healthSample.startTime, end),
-					gte(healthSample.endTime, start)
+					gte(healthSample.endTime, start),
+					notIgnored
 				)
 			)
 			.orderBy(desc(healthSample.value))
 			.limit(1)
 	]);
-	if (!hr.length && !active.length && !sessions.length) return null;
-	const bpm = hr.map((h) => h.value);
-	const peaks = hr.map((h) => Number((h.detail as Json | null)?.max ?? h.value));
+	if (!hr.length && !sessions.length) return null;
+	const calories = sessions[0]
+		? caloriesBySession([{ id: sessions[0].id, time: sessions[0].time }], totals).get(
+				sessions[0].id
+			)
+		: undefined;
+	// With a watch session, use its time (the app workout may have been left open); else the whole window.
+	const watch = sessions[0];
+	const during = watch?.end ? hr.filter((h) => h.time >= watch.time && h.time <= watch.end!) : hr;
+	const readings = during.length ? during : hr.filter((h) => h.time >= start);
+	const bpm = readings.map((h) => h.value);
+	const peaks = readings.map((h) => Number((h.detail as Json | null)?.max ?? h.value));
 	return {
 		avgHr: bpm.length ? Math.round(bpm.reduce((a, b) => a + b, 0) / bpm.length) : null,
 		maxHr: peaks.length ? Math.round(Math.max(...peaks)) : null,
-		calories: active.length ? Math.round(active.reduce((a, c) => a + c.value, 0)) : null,
+		calories: calories ?? null,
 		watchMinutes: sessions[0] ? Math.round(sessions[0].value / 60) : null,
 		watchType: typeof sessions[0]?.detail?.type === 'string' ? sessions[0].detail.type : null
 	};
 }
 
-/** Raw steps and exercise sessions since a date, for the weekly view (grouped by day in the browser). */
+/** Steps, watch sessions and their calories since a date, for the weekly view and Progress. */
 export async function activitySince(userId: string, since: Date) {
-	const [steps, exercise] = await Promise.all([
+	const [steps, exercise, totals] = await Promise.all([
 		samples(userId, 'steps', since),
-		samples(userId, 'exercise', since)
+		samples(userId, 'exercise', since),
+		samples(userId, 'total_calories', since)
 	]);
+	const calories = caloriesBySession(exercise, totals);
 	return {
-		steps: steps.map((s) => ({ time: s.time, count: s.value })),
+		steps: steps.map((s) => ({ time: s.time, end: s.end, count: s.value })),
 		exercise: exercise.map((e) => {
 			const d = (e.detail ?? {}) as Json;
 			return {
+				id: e.id,
+				calories: calories.get(e.id) ?? null,
 				time: e.time,
 				minutes: Math.round(e.value / 60),
 				type: typeof d.type === 'string' ? d.type : null,

@@ -216,7 +216,7 @@
 				{/if}
 				{#if data.vitals?.calories}
 					<div>
-						<dt>Active calories</dt>
+						<dt>Calories</dt>
 						<dd>{data.vitals.calories}</dd>
 					</div>
 				{/if}

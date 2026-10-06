@@ -10,6 +10,9 @@
 	--pull: #1f4fa8;
 	--mobility: #2f6b3a;
 	--chart: #1f4fa8;
+	/* Two-series charts (validated pair: lifting, cardio). */
+	--chart-lift: #b8430f;
+	--chart-cardio: #1f4fa8;
 	--accent: var(--ink);
 	--on-accent: #ffffff;
 	--danger: #a32020;
@@ -33,6 +36,8 @@
 		--pull: #7ea6f2;
 		--mobility: #7fc28c;
 		--chart: #7ea6f2;
+		--chart-lift: #d8703f;
+		--chart-cardio: #5e8be3;
 		--on-accent: #161512;
 		--danger: #f07a7a;
 		--good: #7fc28c;

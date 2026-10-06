@@ -771,6 +771,26 @@ export async function discardSession(userId: string, sessionId: number) {
 		);
 }
 
+/** Finished workouts since a date, for matching watch sessions to lifts. */
+export async function finishedSessions(userId: string, since: Date) {
+	const rows = await db
+		.select({
+			startedAt: workoutSession.startedAt,
+			completedAt: workoutSession.completedAt,
+			kind: workout.kind
+		})
+		.from(workoutSession)
+		.innerJoin(workout, eq(workout.id, workoutSession.workoutId))
+		.where(
+			and(
+				eq(workoutSession.userId, userId),
+				isNotNull(workoutSession.completedAt),
+				gt(workoutSession.startedAt, since)
+			)
+		);
+	return rows.map((r) => ({ ...r, completedAt: r.completedAt! }));
+}
+
 // ─── Progress ────────────────────────────────────────────────────────────────
 
 export interface ProgressPoint {
