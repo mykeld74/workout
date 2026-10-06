@@ -21,6 +21,7 @@ const STRENGTH_TEMPLATES: Record<string, Slot[]> = {
 		['single_leg', 'secondary'],
 		['vertical_push', 'secondary'],
 		['chest_iso', 'accessory'],
+		['triceps', 'accessory'],
 		['shoulder_iso', 'accessory'],
 		['triceps', 'accessory']
 	],
@@ -29,8 +30,8 @@ const STRENGTH_TEMPLATES: Record<string, Slot[]> = {
 		['horizontal_pull', 'primary'],
 		['glute', 'secondary'],
 		['vertical_pull', 'secondary'],
-		['rear_delt', 'accessory'],
 		['biceps', 'accessory'],
+		['rear_delt', 'accessory'],
 		['biceps', 'accessory']
 	],
 	'push-B': [
@@ -38,6 +39,7 @@ const STRENGTH_TEMPLATES: Record<string, Slot[]> = {
 		['horizontal_push', 'primary'],
 		['squat', 'secondary'],
 		['horizontal_push', 'accessory'],
+		['triceps', 'accessory'],
 		['shoulder_iso', 'accessory'],
 		['triceps', 'accessory'],
 		['calves', 'accessory']
@@ -47,8 +49,8 @@ const STRENGTH_TEMPLATES: Record<string, Slot[]> = {
 		['horizontal_pull', 'primary'],
 		['glute', 'secondary'],
 		['vertical_pull', 'accessory'],
-		['rear_delt', 'accessory'],
 		['biceps', 'accessory'],
+		['rear_delt', 'accessory'],
 		['biceps', 'accessory']
 	]
 };
@@ -204,6 +206,33 @@ export function prescribe(ex: ExerciseDef, role: Role, profile: Profile): Planne
 	};
 }
 
+/**
+ * When a slot can't be filled, two exercises for the same muscle (e.g. both curls) can end up
+ * next to each other. Moves the second one later, past a different exercise; failing that (they're
+ * at the end), moves the first one earlier.
+ */
+function separateRepeats(exercises: PlannedExercise[], patterns: Pattern[]) {
+	const move = (from: number, to: number) => {
+		exercises.splice(to, 0, ...exercises.splice(from, 1));
+		patterns.splice(to, 0, ...patterns.splice(from, 1));
+	};
+	for (let i = 1; i < exercises.length; i++) {
+		const p = patterns[i];
+		if (p !== patterns[i - 1]) continue;
+		const later = patterns.findIndex((q, k) => k > i && q !== p && patterns[k + 1] !== p);
+		if (later !== -1) {
+			move(i, later);
+			continue;
+		}
+		for (let k = i - 2; k >= 0; k--) {
+			if (patterns[k] !== p && (k === 0 || patterns[k - 1] !== p)) {
+				move(i - 1, k);
+				break;
+			}
+		}
+	}
+}
+
 interface GenerateOptions {
 	profile: Profile;
 	pool: ExerciseDef[];
@@ -275,13 +304,16 @@ export function generateProgram(opts: GenerateOptions): PlannedProgram {
 		const sheet = useSheets ? SHEET_LAYOUT[key] : undefined;
 		const exercises: PlannedExercise[] = [];
 		const inWorkout = new Set<string>();
+		const patterns: Pattern[] = [];
 		slots.forEach(([pattern, role], i) => {
 			const ex = pickForSlot(pattern, role, inWorkout, sheet?.[i]);
 			if (!ex) return;
 			inWorkout.add(ex.id);
 			used.add(ex.id);
 			exercises.push(prescribe(ex, role, profile));
+			patterns.push(ex.pattern);
 		});
+		separateRepeats(exercises, patterns);
 		workouts.push({
 			kind,
 			variant,

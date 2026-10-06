@@ -95,6 +95,13 @@ const PHOTOS: Record<string, [folder: string, approx?: boolean]> = {
 	'band-pull-apart': ['Band_Pull_Apart'],
 	'bench-dip': ['Bench_Dips'],
 	'band-curl': ['Dumbbell_Bicep_Curl', true],
+	'kb-overhead-triceps': ['Standing_Dumbbell_Triceps_Extension', true],
+	'diamond-push-up': ['Push-Ups_-_Close_Triceps_Position'],
+	'band-pushdown': ['Triceps_Pushdown', true],
+	'band-hammer-curl': ['Hammer_Curls', true],
+	'kb-curl': ['Dumbbell_Bicep_Curl', true],
+	'kb-hammer-curl': ['Hammer_Curls', true],
+	'flexed-arm-hang': ['Chin-Up', true],
 	'kb-swing': ['One-Arm_Kettlebell_Swings', true],
 	'cat-cow': ['Cat_Stretch'],
 	'worlds-greatest-stretch': ['Worlds_Greatest_Stretch'],
@@ -589,6 +596,83 @@ const BASE: ExerciseDef[] = [
 		cues: ['Hands on bench edge behind you', 'Lower to 90° at the elbow, no deeper']
 	}),
 	strength({
+		id: 'band-pushdown',
+		name: 'Band triceps pushdown',
+		pattern: 'triceps',
+		equipment: ['band'],
+		muscles: ['triceps'],
+		reps: [12, 15],
+		source: 'starter',
+		cues: ['Anchor band high, elbows pinned to sides', 'Push down to lockout, return slowly']
+	}),
+	strength({
+		id: 'band-overhead-triceps',
+		name: 'Band overhead triceps ext.',
+		pattern: 'triceps',
+		equipment: ['band'],
+		muscles: ['triceps'],
+		reps: [12, 15],
+		source: 'starter',
+		cues: ['Anchor band low behind you, hands behind head', 'Elbows point up, extend overhead']
+	}),
+	strength({
+		id: 'kb-overhead-triceps',
+		name: 'Kettlebell overhead triceps ext.',
+		pattern: 'triceps',
+		equipment: ['kettlebell'],
+		muscles: ['triceps'],
+		reps: [10, 12],
+		source: 'starter',
+		cues: ['Hold the horns, bell behind your head', 'Elbows point up, extend overhead']
+	}),
+	strength({
+		id: 'kb-floor-skull-crusher',
+		name: 'Kettlebell floor skull crusher',
+		pattern: 'triceps',
+		equipment: ['kettlebell'],
+		muscles: ['triceps'],
+		reps: [10, 12],
+		source: 'starter',
+		cues: [
+			'Lie on floor, bell by the horns over your chest',
+			'Bend elbows to lower beside head, extend'
+		]
+	}),
+	strength({
+		id: 'diamond-push-up',
+		name: 'Close-grip push-up',
+		pattern: 'triceps',
+		muscles: ['triceps', 'chest'],
+		reps: [6, 12],
+		source: 'starter',
+		cues: [
+			'Hands under shoulders, elbows brush your sides',
+			'Knees down is fine; body stays straight'
+		]
+	}),
+	strength({
+		id: 'counter-triceps-extension',
+		name: 'Counter triceps extension',
+		pattern: 'triceps',
+		muscles: ['triceps'],
+		reps: [10, 15],
+		source: 'starter',
+		cues: [
+			'Hands on a sturdy counter, step back and lean in',
+			'Bend elbows to bring forehead toward hands, push back',
+			'Step further back to make it harder'
+		]
+	}),
+	strength({
+		id: 'prone-t-raise',
+		name: 'Prone T raise',
+		pattern: 'rear_delt',
+		muscles: ['shoulders', 'middle back'],
+		reps: [10, 15],
+		source: 'starter',
+		cues: ['Face down, arms out in a T, thumbs up', 'Squeeze shoulder blades, lift arms, pause']
+	}),
+	strength({
 		id: 'band-curl',
 		name: 'Band curl',
 		pattern: 'biceps',
@@ -597,6 +681,76 @@ const BASE: ExerciseDef[] = [
 		reps: [12, 15],
 		source: 'starter',
 		cues: ['Stand on band, elbows pinned', 'Curl up, lower slow']
+	}),
+	strength({
+		id: 'band-hammer-curl',
+		name: 'Band hammer curl',
+		pattern: 'biceps',
+		equipment: ['band'],
+		muscles: ['biceps', 'forearms'],
+		reps: [12, 15],
+		source: 'starter',
+		cues: ['Stand on band, palms face each other', 'Elbows pinned, lower slow']
+	}),
+	strength({
+		id: 'kb-curl',
+		name: 'Kettlebell curl',
+		pattern: 'biceps',
+		equipment: ['kettlebell'],
+		muscles: ['biceps'],
+		reps: [10, 12],
+		source: 'starter',
+		cues: ['Hold the handle, bell hanging below', 'Elbows pinned, curl, lower slow']
+	}),
+	strength({
+		id: 'kb-hammer-curl',
+		name: 'Kettlebell hammer curl',
+		pattern: 'biceps',
+		equipment: ['kettlebell'],
+		muscles: ['biceps', 'forearms'],
+		reps: [10, 12],
+		source: 'starter',
+		cues: ['Grip the horns, palms facing in', 'Elbows pinned, curl, lower slow']
+	}),
+	strength({
+		id: 'towel-iso-curl',
+		name: 'Towel isometric curl',
+		pattern: 'biceps',
+		muscles: ['biceps'],
+		reps: [20, 30],
+		unit: 'seconds',
+		source: 'starter',
+		cues: [
+			'Stand on the middle of a towel, hold both ends',
+			'Curl to a 90° elbow and pull up hard against it',
+			'Hold; keep breathing'
+		]
+	}),
+	strength({
+		id: 'doorframe-curl',
+		name: 'Doorframe curl',
+		pattern: 'biceps',
+		muscles: ['biceps'],
+		reps: [10, 15],
+		unilateral: true,
+		source: 'starter',
+		cues: [
+			'Grip a doorframe, feet close to it, lean back with arm straight',
+			'Curl your body toward the frame, elbow up and still',
+			'Walk feet closer to make it harder'
+		]
+	}),
+	strength({
+		id: 'flexed-arm-hang',
+		name: 'Chin-up hold',
+		pattern: 'biceps',
+		equipment: ['pullup_bar'],
+		muscles: ['biceps', 'lats'],
+		reps: [10, 20],
+		unit: 'seconds',
+		level: 'intermediate',
+		source: 'starter',
+		cues: ['Palms facing you, chin over the bar', 'Hold the top; step or jump up if needed']
 	}),
 	strength({
 		id: 'kb-swing',
@@ -952,25 +1106,27 @@ export const SHEET_LAYOUT: Record<string, string[]> = {
 		'bulgarian-split-squat',
 		'seated-db-press',
 		'db-fly',
+		'overhead-db-triceps',
 		'db-lateral-raise',
-		'overhead-db-triceps'
+		'one-arm-overhead-triceps'
 	],
 	'pull-A': [
 		'db-rdl',
 		'one-arm-db-row',
 		'db-hip-thrust',
 		'band-lat-pulldown',
+		'db-curl',
 		'band-face-pull',
-		'incline-db-curl',
-		'db-curl'
+		'incline-db-curl'
 	],
 	'push-B': [
 		'reverse-lunge',
 		'incline-db-press',
 		'heel-elevated-goblet-squat',
 		'push-up',
-		'db-upright-row',
 		'db-skull-crusher',
+		'db-upright-row',
+		'overhead-triceps-iso-hold',
 		'standing-calf-raise'
 	],
 	'pull-B': [
@@ -978,8 +1134,8 @@ export const SHEET_LAYOUT: Record<string, string[]> = {
 		'chest-supported-db-row',
 		'feet-up-single-leg-bridge',
 		'db-pullover',
-		'db-rear-delt-fly',
 		'hammer-curl',
+		'db-rear-delt-fly',
 		'db-spider-curl'
 	],
 	'mobility-A': [

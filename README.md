@@ -114,7 +114,7 @@ src/
 
 ## How plans are generated
 
-Each lifting day is a list of slots, each a movement pattern plus a role (primary, secondary or accessory), e.g. Push A = squat, horizontal push, single-leg, vertical push, chest isolation, shoulder isolation, triceps. For each slot the generator:
+Each lifting day is a list of slots, each a movement pattern plus a role (primary, secondary or accessory), e.g. Push A = squat, horizontal push, single-leg, vertical push, chest isolation, triceps, shoulder isolation, triceps. For each slot the generator:
 
 1. Filters the exercise pool to what your equipment allows and what's appropriate for your age and experience.
 2. On your first plan, uses the exercise from the original sheet for that slot when it can.
