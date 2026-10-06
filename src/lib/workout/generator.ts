@@ -90,7 +90,25 @@ export function isAvailable(ex: ExerciseDef, equipment: readonly Equipment[]): b
 	return ex.equipment.every((e) => equipment.includes(e));
 }
 
+/** Holding one dumbbell by its end with both hands: not possible with PowerBlock-style handles. */
+const DUMBBELL_END_IDS = new Set(['overhead-db-triceps', 'db-pullover']);
+
+export function needsDumbbellEnd(ex: ExerciseDef): boolean {
+	if (DUMBBELL_END_IDS.has(ex.id)) return true;
+	return ex.equipment.includes('dumbbell') && /pullover|both hands|two.hand/i.test(ex.name);
+}
+
+export function deloadEveryFor(age: number): number {
+	return age < 40 ? 7 : age < 55 ? 6 : 5;
+}
+
+export function isDeloadWeek(week: number, every: number): boolean {
+	return week > 1 && week % every === 0;
+}
+
 export function isAppropriate(ex: ExerciseDef, profile: Profile): boolean {
+	if (profile.prefs?.hidden.has(ex.id)) return false;
+	if (profile.powerblock && needsDumbbellEnd(ex)) return false;
 	if (ex.jointStress === 'high' && (profile.age >= 55 || profile.experience === 'new'))
 		return false;
 	if (ex.level === 'expert' && (profile.age >= 65 || profile.experience !== 'experienced'))
@@ -129,7 +147,7 @@ export function guidelinesFor(profile: Profile): Guidelines {
 				? 'Stop each set with 1–3 reps left.'
 				: 'Stop each set with 2–3 reps left. Smooth reps beat heavy ones.';
 
-	const deload = age < 40 ? 'every 6–8 weeks' : age < 55 ? 'every 5–6 weeks' : 'every 4–5 weeks';
+	const deloadEvery = deloadEveryFor(age);
 
 	const progress = has('dumbbell')
 		? 'Hit the top of the range on every set → next dumbbell up. Or slow the lowering, pause, add a band.'
@@ -149,20 +167,38 @@ export function guidelinesFor(profile: Profile): Guidelines {
 
 	return {
 		ageBand: ageBand(age),
+		deloadEvery,
 		warmup: `Warm-up (${warmupLength}): ${warmupParts.join(' · ')}`,
 		effort,
-		deload: `Lighter week ${deload}.`,
+		deload: `Every ${deloadEvery}th week is lighter: 2 sets per lift at about 60% of your usual weight.`,
 		progress,
 		notes
 	};
 }
 
-function perSideLabel(ex: ExerciseDef): string {
+function perSideLabel(ex: Pick<ExerciseDef, 'pattern'>): string {
 	return LOWER_BODY.includes(ex.pattern) ? ' / leg' : ' / side';
 }
 
 function range(lo: number, hi: number, suffix: string): string {
 	return lo === hi ? `${lo}${suffix}` : `${lo}–${hi}${suffix}`;
+}
+
+/** "3 × 8–12 / leg", "30–45s / side", "2 × 10". */
+export function targetText(
+	ex: Pick<ExerciseDef, 'unit' | 'unilateral' | 'pattern'>,
+	sets: number,
+	lo: number,
+	hi: number
+): string {
+	const reps =
+		range(lo, hi, ex.unit === 'seconds' ? 's' : '') + (ex.unilateral ? perSideLabel(ex) : '');
+	return sets === 1 ? reps : `${sets} × ${reps}`;
+}
+
+/** Role for an exercise added by hand: lifts are accessories, mobility days keep their kind. */
+export function roleFor(ex: ExerciseDef): Role {
+	return ex.category === 'mobility' ? 'stretch' : ex.category === 'core' ? 'core' : 'accessory';
 }
 
 export function prescribe(ex: ExerciseDef, role: Role, profile: Profile): PlannedExercise {
@@ -182,16 +218,11 @@ export function prescribe(ex: ExerciseDef, role: Role, profile: Profile): Planne
 		}
 	}
 
-	const unitSuffix = ex.unit === 'seconds' ? 's' : '';
-	const side = ex.unilateral ? perSideLabel(ex) : '';
-	let target: string;
-	if (ex.targetLabel) {
-		target =
-			ex.targetLabel.includes('×') || sets === 1 ? ex.targetLabel : `${sets} × ${ex.targetLabel}`;
-	} else {
-		const reps = range(lo, hi, unitSuffix) + side;
-		target = sets === 1 ? reps : `${sets} × ${reps}`;
-	}
+	const target = ex.targetLabel
+		? ex.targetLabel.includes('×') || sets === 1
+			? ex.targetLabel
+			: `${sets} × ${ex.targetLabel}`
+		: targetText(ex, sets, lo, hi);
 
 	return {
 		exerciseId: ex.id,
@@ -257,6 +288,7 @@ export function generateProgram(opts: GenerateOptions): PlannedProgram {
 		let s = random();
 		if (previous.has(ex.id)) s -= 2;
 		if (ex.source !== 'free-exercise-db') s += 0.3;
+		if (profile.prefs?.favorites.has(ex.id)) s += 0.8;
 		if (role === 'primary' && ex.equipment.some((e) => LOADABLE.includes(e))) s += 0.6;
 		return s;
 	}
@@ -390,7 +422,9 @@ export function replacementOptions(
 		ex.category === current.category &&
 		isAvailable(ex, profile.equipment) &&
 		isAppropriate(ex, profile);
+	const fav = (ex: ExerciseDef) => Number(!profile.prefs?.favorites.has(ex.id));
 	const curatedFirst = (a: ExerciseDef, b: ExerciseDef) =>
+		fav(a) - fav(b) ||
 		Number(a.source === 'free-exercise-db') - Number(b.source === 'free-exercise-db') ||
 		a.name.localeCompare(b.name);
 	return [current.pattern, ...(FALLBACK[current.pattern] ?? [])].flatMap((p) =>

@@ -9,7 +9,8 @@ import {
 	date,
 	jsonb,
 	index,
-	uniqueIndex
+	uniqueIndex,
+	primaryKey
 } from 'drizzle-orm/pg-core';
 import { user } from './auth.schema';
 import type { Guidelines } from '../../workout/types.ts';
@@ -48,6 +49,8 @@ export const profile = pgTable('profile', {
 	birthDate: date('birth_date', { mode: 'string' }).notNull(),
 	equipment: text('equipment').array().notNull(),
 	experience: text('experience').notNull().default('returning'),
+	powerblock: boolean('powerblock').notNull().default(false),
+	weightIncrement: real('weight_increment').notNull().default(5),
 	updatedAt: timestamp('updated_at').defaultNow().notNull()
 });
 
@@ -131,9 +134,10 @@ export const setLog = pgTable(
 		sessionId: integer('session_id')
 			.notNull()
 			.references(() => workoutSession.id, { onDelete: 'cascade' }),
-		workoutExerciseId: integer('workout_exercise_id')
-			.notNull()
-			.references(() => workoutExercise.id, { onDelete: 'cascade' }),
+		// Kept when an exercise is removed from a plan, so its history survives.
+		workoutExerciseId: integer('workout_exercise_id').references(() => workoutExercise.id, {
+			onDelete: 'set null'
+		}),
 		exerciseId: text('exercise_id').notNull(),
 		setNumber: integer('set_number').notNull(),
 		weight: real('weight'),
@@ -143,6 +147,55 @@ export const setLog = pgTable(
 	(t) => [
 		uniqueIndex('set_log_unique').on(t.sessionId, t.workoutExerciseId, t.setNumber),
 		index('set_log_exercise_idx').on(t.exerciseId)
+	]
+);
+
+/** Exercises a user starred (picked more often) or hid (never picked). */
+export const exercisePref = pgTable(
+	'exercise_pref',
+	{
+		userId: text('user_id')
+			.notNull()
+			.references(() => user.id, { onDelete: 'cascade' }),
+		exerciseId: text('exercise_id')
+			.notNull()
+			.references(() => exercise.id, { onDelete: 'cascade' }),
+		status: text('status').notNull()
+	},
+	(t) => [primaryKey({ columns: [t.userId, t.exerciseId] })]
+);
+
+/** One key per user for the phone app that sends Health Connect data. Only a hash is stored. */
+export const healthKey = pgTable('health_key', {
+	userId: text('user_id')
+		.primaryKey()
+		.references(() => user.id, { onDelete: 'cascade' }),
+	keyHash: text('key_hash').notNull().unique(),
+	createdAt: timestamp('created_at').defaultNow().notNull(),
+	lastUsedAt: timestamp('last_used_at')
+});
+
+/**
+ * Readings from Samsung Health via Health Connect: one row per reading or interval.
+ * `value` is in the metric's base unit (bpm, ms, kg, steps, meters, kcal, seconds for exercise).
+ */
+export const healthSample = pgTable(
+	'health_sample',
+	{
+		id: serial('id').primaryKey(),
+		userId: text('user_id')
+			.notNull()
+			.references(() => user.id, { onDelete: 'cascade' }),
+		metric: text('metric').notNull(),
+		startTime: timestamp('start_time').notNull(),
+		endTime: timestamp('end_time'),
+		value: real('value').notNull(),
+		detail: jsonb('detail').$type<Record<string, unknown>>(),
+		receivedAt: timestamp('received_at').defaultNow().notNull()
+	},
+	(t) => [
+		// The phone resends overlapping windows; this keeps one row per reading.
+		uniqueIndex('health_sample_unique').on(t.userId, t.metric, t.startTime)
 	]
 );
 

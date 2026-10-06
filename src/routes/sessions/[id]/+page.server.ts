@@ -6,12 +6,20 @@ import {
 	getSession,
 	logSet
 } from '#lib/server/workouts.ts';
+import { readiness, workoutVitals } from '#lib/server/health.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
-	const data = await getSession(locals.user!.id, Number(params.id));
+	const userId = locals.user!.id;
+	const data = await getSession(userId, Number(params.id));
 	if (!data) error(404, 'Session not found');
-	return data;
+	const { completedAt, startedAt } = data.session;
+	return {
+		...data,
+		// Before: should today be easier? After: what the watch recorded during the workout.
+		readiness: completedAt ? null : await readiness(userId),
+		vitals: completedAt ? await workoutVitals(userId, startedAt, completedAt) : null
+	};
 };
 
 function optionalNumber(value: FormDataEntryValue | null): number | null | undefined {
@@ -55,7 +63,8 @@ export const actions: Actions = {
 		const bodyWeight = optionalNumber(form.get('bodyWeight')) ?? null;
 		const notes = form.get('notes')?.toString().trim() || null;
 		await finishSession(locals.user!.id, Number(params.id), bodyWeight, notes);
-		redirect(303, '/');
+		// Land on the summary.
+		redirect(303, `/sessions/${params.id}`);
 	},
 	discard: async ({ params, locals }) => {
 		await discardSession(locals.user!.id, Number(params.id));

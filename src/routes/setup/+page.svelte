@@ -81,6 +81,32 @@
 			<p class="muted hint">Bodyweight exercises are always included.</p>
 		</fieldset>
 
+		<fieldset>
+			<legend>Dumbbells</legend>
+			<label class="choice">
+				<input type="checkbox" name="powerblock" checked={data.profile.powerblock} />
+				<span
+					>PowerBlock-style adjustable dumbbells
+					<small class="muted">Leaves out moves that hold one dumbbell by its end</small></span
+				>
+			</label>
+			<label class="increment">
+				Smallest weight jump
+				<select name="weightIncrement" value={String(data.profile.weightIncrement ?? 5)}>
+					<option value="1">1 lb</option>
+					<option value="2.5">2.5 lb (e.g. PowerBlock add-on weights)</option>
+					<option value="5">5 lb</option>
+					<option value="10">10 lb</option>
+				</select>
+			</label>
+			<p class="muted hint">Used to suggest your next weight when it's time to go up.</p>
+		</fieldset>
+
+		<p class="connect">
+			Track with a Galaxy Watch? <a href="/health">Connect Samsung Health</a> for weight, heart rate,
+			readiness and steps.
+		</p>
+
 		{#if data.hasProgram}
 			<label class="choice">
 				<input type="checkbox" name="regenerate" />
@@ -120,6 +146,18 @@
 
 	.age {
 		max-width: 220px;
+	}
+
+	.connect {
+		margin: 0;
+		padding: 12px 14px;
+		background: var(--wash);
+		border-radius: var(--radius);
+		font-size: 15px;
+	}
+
+	.increment {
+		max-width: 340px;
 	}
 
 	fieldset {

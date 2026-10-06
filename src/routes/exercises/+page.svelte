@@ -1,11 +1,22 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { page } from '$app/state';
 	import ExerciseCues from '#lib/components/ExerciseCues.svelte';
 	import { EQUIPMENT, PATTERNS, type Equipment, type Pattern } from '#lib/workout/types.ts';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
 	let importing = $state(false);
+	let saving = $state<string | null>(null);
+
+	/** A form action that keeps the current search and filters, e.g. "?q=curl&/pref". */
+	const action = (name: string) => {
+		const query = page.url.searchParams.toString();
+		return `?${query ? `${query}&` : ''}/${name}`;
+	};
+
+	const favorites = $derived(new Set(data.favorites));
+	const hidden = $derived(new Set(data.hidden));
 
 	const SOURCE_LABELS: Record<string, string> = {
 		sheet: 'Your sheets',
@@ -21,7 +32,8 @@
 	<p class="kicker">{total} exercises in your database</p>
 	<h1>Exercises</h1>
 	<p class="muted">
-		The generator picks from everything here that fits your equipment and age. {#each data.sources as s, i (s.source)}{i
+		The generator picks from everything here that fits your equipment and age. Starred exercises get
+		picked more often; hidden ones never. {#each data.sources as s, i (s.source)}{i
 				? ' · '
 				: ''}{SOURCE_LABELS[s.source] ?? s.source}: {s.count}{/each}
 	</p>
@@ -39,7 +51,7 @@
 	</div>
 	<form
 		method="post"
-		action="?/import"
+		action={action('import')}
 		use:enhance={() => {
 			importing = true;
 			return async ({ update }) => {
@@ -79,6 +91,14 @@
 		</select>
 	</label>
 	<label>
+		Show
+		<select name="show" value={data.filters.show}>
+			<option value="">All except hidden</option>
+			<option value="favorites">Starred ({data.favorites.length})</option>
+			<option value="hidden">Hidden ({data.hidden.length})</option>
+		</select>
+	</label>
+	<label>
 		Equipment
 		<select name="mine" value={data.filters.mine ? '1' : '0'}>
 			<option value="1">Fits my gear</option>
@@ -101,6 +121,45 @@
 				<h3>{ex.name}</h3>
 				<span class="pill">{PATTERNS[ex.pattern as Pattern] ?? ex.pattern}</span>
 			</div>
+			<form
+				class="prefs"
+				method="post"
+				action={action('pref')}
+				use:enhance={() => {
+					saving = ex.id;
+					return async ({ update }) => {
+						await update({ reset: false });
+						saving = null;
+					};
+				}}
+			>
+				<input type="hidden" name="exerciseId" value={ex.id} />
+				<button
+					class="pref"
+					class:on={favorites.has(ex.id)}
+					name="status"
+					value={favorites.has(ex.id) ? '' : 'favorite'}
+					aria-pressed={favorites.has(ex.id)}
+					disabled={saving === ex.id}
+				>
+					<svg viewBox="0 0 24 24" aria-hidden="true"
+						><path
+							d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"
+						/></svg
+					>
+					{favorites.has(ex.id) ? 'Starred' : 'Star'}<span class="sr-only"> {ex.name}</span>
+				</button>
+				<button
+					class="pref"
+					class:on={hidden.has(ex.id)}
+					name="status"
+					value={hidden.has(ex.id) ? '' : 'hidden'}
+					aria-pressed={hidden.has(ex.id)}
+					disabled={saving === ex.id}
+				>
+					{hidden.has(ex.id) ? 'Unhide' : 'Never show'}<span class="sr-only"> {ex.name}</span>
+				</button>
+			</form>
 			<p class="meta muted">
 				{ex.equipment.length
 					? ex.equipment.map((e) => EQUIPMENT[e as Equipment] ?? e).join(', ')
@@ -153,7 +212,7 @@
 
 	.filters {
 		display: grid;
-		grid-template-columns: 2fr 1fr 1fr 1fr auto;
+		grid-template-columns: 2fr 1fr 1fr 1fr 1fr auto;
 		gap: 10px;
 		align-items: end;
 		margin-top: 24px;
@@ -191,6 +250,45 @@
 		padding: 3px 8px;
 		border-radius: 999px;
 		background: var(--wash);
+	}
+
+	.prefs {
+		display: flex;
+		gap: 6px;
+		margin: 6px 0 4px;
+	}
+
+	.pref {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		min-height: 36px;
+		padding: 0 12px;
+		border: 1.5px solid var(--line);
+		border-radius: 999px;
+		background: var(--paper);
+		color: var(--ink-2);
+		font: 600 14px/1 var(--body);
+		cursor: pointer;
+	}
+
+	.pref.on {
+		border-color: var(--ink);
+		color: var(--ink);
+		background: var(--wash);
+	}
+
+	.pref svg {
+		width: 16px;
+		height: 16px;
+		fill: none;
+		stroke: currentColor;
+		stroke-width: 2;
+		stroke-linejoin: round;
+	}
+
+	.pref.on svg {
+		fill: currentColor;
 	}
 
 	.meta {

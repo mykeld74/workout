@@ -9,6 +9,7 @@
 	--push: #b8430f;
 	--pull: #1f4fa8;
 	--mobility: #2f6b3a;
+	--chart: #1f4fa8;
 	--accent: var(--ink);
 	--on-accent: #ffffff;
 	--danger: #a32020;
@@ -31,6 +32,7 @@
 		--push: #f08a54;
 		--pull: #7ea6f2;
 		--mobility: #7fc28c;
+		--chart: #7ea6f2;
 		--on-accent: #161512;
 		--danger: #f07a7a;
 		--good: #7fc28c;

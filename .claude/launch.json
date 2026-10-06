@@ -16,6 +16,17 @@
 				"preview"
 			],
 			"port": 4173
+		},
+		{
+			"name": "dev-debug",
+			"runtimeExecutable": "pnpm",
+			"runtimeArgs": [
+				"dev",
+				"--port",
+				"5174",
+				"--strictPort"
+			],
+			"port": 5174
 		}
 	]
 }

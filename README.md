@@ -6,7 +6,7 @@ The starting point is the original Push/Pull workout sheets: a 4-day Push A → 
 
 ## Features
 
-- **Profile** — birthday (age is calculated, so it stays current), training experience, and a checklist of equipment. Bodyweight exercises are always available.
+- **Profile** — birthday (age is calculated, so it stays current), training experience, a checklist of equipment, a **PowerBlock-style dumbbells** option (leaves out moves that hold one dumbbell by its end) and your smallest weight jump (1 / 2.5 / 5 / 10 lb). Bodyweight exercises are always available.
 - **Age-aware plans** — age shapes rep ranges, warm-up length, effort targets (reps left in reserve), how often to take a lighter week, and which exercises are allowed:
 
   | Age      | Changes                                                                                                               |
@@ -16,16 +16,25 @@ The starting point is the original Push/Pull workout sheets: a 4-day Push A → 
   | 55–64    | 10–12 min warm-up with balance work, reps start at 8+, lighter week every 4–5 weeks, high joint-stress lifts left out |
   | 65+      | As 55–64, plus 10–15 reps, 2–3 reps in reserve, expert-level lifts left out                                           |
 
-- **Plan page** — what's next in the rotation, every workout in the current plan, how to run it, recent sessions, and **New workouts** to build a new plan that avoids the current exercises (history is kept).
-- **Workout preview** — every exercise with target, rest, photos and cues. **Swap** opens a list of exercises that fit the same slot with your equipment, or **Surprise me** for a random pick.
+- **Plan page** — what's next in the rotation, a **This week** view (lift and mobility days, lifts done of 4, and a streak of weeks with 3+ lifts), every workout in the current plan, how to run it, recent sessions, and **New workouts** to build a new plan that avoids the current exercises (history is kept).
+- **Lighter weeks** — every 5th–7th week (by age) is flagged automatically: lifts drop to 2 sets and the suggested weight to about 60%.
+- **Workout preview and plan editor** — every exercise with target, rest, photos and cues. **Swap** opens a list of exercises that fit the same slot (starred ones first), or **Surprise me** for a random pick. **Edit plan** lets you reorder exercises, change sets and the rep range, remove exercises (their logged history is kept) and add any exercise that fits your gear.
 - **Workout screen** — one exercise at a time:
   - Log weight and reps (or seconds for holds) per set; weights prefill from last time.
-  - "Last time" numbers, plus a nudge to go up a weight when you hit the top of the range on every set.
-  - Tapping **Done** starts a rest countdown at the low end of the rest range (90–120s → 90s), with +30s and Skip. Stretches have no rest timer; holds get a hold timer.
+  - "Last time" numbers. When you hit the top of the range on every set, it suggests and prefills the next weight using your weight jump (e.g. 25 → 30 lb).
+  - The screen stays on during a workout.
+  - Tapping **Done** starts a rest countdown at the low end of the rest range (90–120s → 90s), with +30s and Skip, and a beep plus vibration when it ends (sound can be turned off on the timer). Stretches have no rest timer; holds get a hold timer.
+  - If the signal drops, sets are kept on the phone and sent when the connection returns; finishing waits until they're saved.
   - Photos, cues and a **Watch video** link sit in a collapsible "How to do it" panel so the inputs stay in view on a phone.
-  - Finish with optional body weight and notes, or discard the session.
-- **Exercise library** — search and filter by movement, source and "fits my gear". **Import** pulls ~800 strength and stretching exercises (with instructions and start/finish photos) from the public-domain [Free Exercise DB](https://github.com/yuhonas/free-exercise-db). Re-running it adds anything new and refreshes photos without duplicates.
-- **Accounts** — email and password sign-in via Better Auth. Every page except `/login` requires a signed-in user.
+  - Finish with optional body weight and notes, or discard the session. Finishing shows a summary: time, sets, weight moved, change since the last time you did that workout, and any new personal records.
+- **Progress** — per exercise, a chart of your best set from each workout (estimated max for weighted lifts, reps or seconds otherwise), personal records, change since you started, a table view, and your body-weight trend.
+- **Exercise library** — search and filter by movement, source and "fits my gear". **Star** exercises to have them picked more often, or **Never show** to keep them out of plans, swaps and the add list. **Import** pulls ~800 strength and stretching exercises (with instructions and start/finish photos) from the public-domain [Free Exercise DB](https://github.com/yuhonas/free-exercise-db). Re-running it adds anything new and refreshes photos without duplicates.
+- **Samsung Health** (`/health`, linked from Profile) — Galaxy Watch and phone data arrives through Health Connect and the open-source [Health Connect Webhook](https://github.com/mcnaveen/health-connect-webhook) app, which posts to `POST /api/health` with an `Authorization: Bearer <key>` header (keys are made on `/health`; only a hash is stored). It powers:
+  - a daily **readiness** note: resting heart rate 5+ bpm above, or HRV 15%+ below, your 14-day normal suggests an easier session;
+  - **heart rate and active calories** in each workout summary;
+  - **steps per day and cardio sessions** in the weekly view;
+  - **body weight** merged into the Progress chart, plus **resting heart rate** and **HRV** trends.
+- **Accounts** — email and password sign-in via Better Auth. Every page except `/login` (and `/api/health`, which checks its own key) requires a signed-in user.
 
 ## Tech stack
 
@@ -92,20 +101,28 @@ src/
 │   ├── workout/               Pure logic, no database (runs in Node directly)
 │   │   ├── types.ts           Equipment, movement patterns, profile, age helper
 │   │   ├── catalog.ts         Exercises from the sheets + starters, photo mapping
-│   │   └── generator.ts       Plan generator, age rules, prescriptions, swaps
+│   │   ├── generator.ts       Plan generator, age rules, prescriptions, swaps
+│   │   ├── progression.ts     Next weight, lighter-week weight, estimated max, volume
+│   │   └── week.ts            "This week" view and streak
 │   ├── server/
 │   │   ├── workouts.ts        Plans, sessions, set logs, swaps, search
+│   │   ├── health.ts          Samsung Health keys, ingest, readiness, watch vitals
 │   │   ├── exercise-import.ts Free Exercise DB importer and mapping
 │   │   ├── auth.ts            Better Auth config
 │   │   └── db/                Drizzle client and schema
 │   └── components/
 │       ├── ExerciseCues.svelte Photos, cues, video link, collapsible panel
-│       └── Countdown.svelte    Rest / hold timer
+│       ├── Countdown.svelte    Rest / hold timer with beep
+│       ├── LineChart.svelte    Progress charts
+│       └── WeekView.svelte     This-week panel
 └── routes/
     ├── +page.*                Plan dashboard and "New workouts"
     ├── login/                 Sign in / create account
     ├── setup/                 Profile: birthday, experience, equipment
-    ├── workouts/[id]/         Workout preview and swap menu
+    ├── workouts/[id]/         Workout preview, swap menu and plan editor
+    ├── progress/              Charts, personal records, body weight, heart trends
+    ├── health/                Samsung Health setup and status
+    ├── api/health/            Receives Health Connect data from the phone
     ├── sessions/[id]/         Workout screen: logging, timers, finish
     └── exercises/             Library, filters, import
 ```

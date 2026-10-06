@@ -81,6 +81,17 @@ export interface Profile {
 	age: number;
 	equipment: Equipment[];
 	experience: Experience;
+	/** Adjustable dumbbells with caged handles: no holding one dumbbell by its end. */
+	powerblock?: boolean;
+	/** Smallest weight jump available, in lb. */
+	weightIncrement?: number;
+	/** Exercises the user starred or hid. */
+	prefs?: ExercisePrefs;
+}
+
+export interface ExercisePrefs {
+	favorites: Set<string>;
+	hidden: Set<string>;
 }
 
 /** What's stored: birth date as YYYY-MM-DD, so age stays current. */
@@ -99,6 +110,8 @@ export function ageFromBirthDate(birthDate: string, today = new Date()): number 
 
 export interface Guidelines {
 	ageBand: string;
+	/** Every Nth week is a lighter week. Missing on plans made before this existed. */
+	deloadEvery?: number;
 	warmup: string;
 	effort: string;
 	deload: string;

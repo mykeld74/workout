@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { beep, setSoundEnabled, soundEnabled, unlockAudio } from '#lib/alert-sound.ts';
+
 	interface Props {
 		label: string;
 		seconds: number;
@@ -11,6 +13,7 @@
 	let { label, seconds, startKey, ondone, onclose }: Props = $props();
 
 	let endAt = $state(0);
+	let sound = $state(soundEnabled());
 	let now = $state(Date.now());
 
 	$effect(() => {
@@ -29,6 +32,7 @@
 	$effect(() => {
 		if (!done) return;
 		navigator.vibrate?.([200, 100, 200]);
+		beep();
 		ondone?.();
 	});
 
@@ -41,6 +45,24 @@
 	<span class="label">{done ? `${label} done` : label}</span>
 	<span class="time">{fmt(remaining)}</span>
 	<div class="actions">
+		<button
+			type="button"
+			class="btn ghost small sound"
+			aria-pressed={sound}
+			aria-label={sound ? 'Timer sound on' : 'Timer sound off'}
+			onclick={() => {
+				sound = !sound;
+				setSoundEnabled(sound);
+				if (sound) unlockAudio();
+			}}
+		>
+			<svg viewBox="0 0 24 24" aria-hidden="true">
+				<path d="M4 9v6h4l5 4V5L8 9z" />
+				{#if sound}<path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11" />{:else}<path
+						d="M17 9l5 6M22 9l-5 6"
+					/>{/if}
+			</svg>
+		</button>
 		{#if !done}
 			<button type="button" class="btn ghost small" onclick={() => (endAt += 30_000)}>+30s</button>
 		{/if}
@@ -73,6 +95,16 @@
 	.time {
 		font: 800 36px/1 var(--display);
 		font-variant-numeric: tabular-nums;
+	}
+
+	.sound svg {
+		width: 20px;
+		height: 20px;
+		fill: none;
+		stroke: currentColor;
+		stroke-width: 2;
+		stroke-linecap: round;
+		stroke-linejoin: round;
 	}
 
 	.actions {

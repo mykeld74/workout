@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import ReadinessNote from '#lib/components/ReadinessNote.svelte';
+	import WeekView from '#lib/components/WeekView.svelte';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -24,6 +26,15 @@
 			New plan ready. Fresh exercises, same structure.
 		</p>{/if}
 </section>
+
+<ReadinessNote readiness={data.readiness} />
+
+{#if data.program.deload}
+	<p class="deload card">
+		<strong>Lighter week.</strong> Week {data.program.week} is a recovery week: 2 sets per lift at about
+		60% of your usual weight. The workout screen sets this up for you.
+	</p>
+{/if}
 
 {#if data.inProgress}
 	<a class="resume card" href="/sessions/{data.inProgress.id}">
@@ -50,6 +61,8 @@
 		</div>
 	{/each}
 </section>
+
+<WeekView history={data.history} activity={data.activity} />
 
 <section>
 	<h2>Lifting days</h2>
@@ -170,6 +183,12 @@
 		background: var(--wash);
 		border-radius: var(--radius);
 		font-weight: 600;
+	}
+
+	.deload {
+		margin: 16px 0 0;
+		background: var(--wash);
+		border: none;
 	}
 
 	.resume {

@@ -15,6 +15,7 @@
 
 	const links = [
 		{ href: '/', label: 'Plan' },
+		{ href: '/progress', label: 'Progress' },
 		{ href: '/exercises', label: 'Exercises' },
 		{ href: '/setup', label: 'Profile' }
 	];

@@ -16,7 +16,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 		profile: profile ?? {
 			birthDate: '',
 			equipment: DEFAULT_EQUIPMENT,
-			experience: 'returning' as Experience
+			experience: 'returning' as Experience,
+			powerblock: false,
+			weightIncrement: 5
 		},
 		isNew: !profile,
 		hasProgram: !!dashboard
@@ -36,6 +38,9 @@ export const actions: Actions = {
 			.map(String)
 			.filter((e): e is Equipment => e in EQUIPMENT);
 		const regenerate = form.get('regenerate') === 'on';
+		const powerblock = form.get('powerblock') === 'on';
+		const increment = Number(form.get('weightIncrement'));
+		const weightIncrement = [1, 2.5, 5, 10].includes(increment) ? increment : 5;
 
 		const validDate =
 			/^\d{4}-\d{2}-\d{2}$/.test(birthDate) && !Number.isNaN(Date.parse(`${birthDate}T00:00:00Z`));
@@ -47,10 +52,11 @@ export const actions: Actions = {
 			return fail(400, { message: 'Pick your training experience.' });
 		}
 
-		await saveProfile(userId, { birthDate, experience, equipment });
+		await saveProfile(userId, { birthDate, experience, equipment, powerblock, weightIncrement });
 
 		const existing = await getDashboard(userId);
-		if (!existing || regenerate) await createProgram(userId, { age, experience, equipment });
+		if (!existing || regenerate)
+			await createProgram(userId, { age, experience, equipment, powerblock, weightIncrement });
 		redirect(303, '/');
 	}
 };
