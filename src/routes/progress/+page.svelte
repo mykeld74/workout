@@ -403,11 +403,11 @@
 	</section>
 {/if}
 
-{#each [{ title: 'Resting heart rate', unit: 'bpm', rows: data.restingHr, note: 'Lower over time usually means better fitness.' }, { title: 'Heart rate variability', unit: 'ms', rows: data.hrv, note: 'Higher usually means better recovered.' }] as m (m.title)}
+{#each [{ title: 'Resting heart rate', unit: 'bpm', rows: data.restingHr, note: 'Lower over time usually means better fitness. The rate you usually sit at while you are up, not the lowest beat of the day.' }, { title: 'Heart rate variability', unit: 'ms', rows: data.hrv, note: 'Higher usually means better recovered. From your Galaxy Watch, one value per day.' }] as m (m.title)}
 	{#if m.rows.length >= 2}
 		<section class="card focus">
 			<h2 class="chart-title">{m.title} ({m.unit})</h2>
-			<p class="muted small">{m.note} From your Galaxy Watch, one value per day.</p>
+			<p class="muted small">{m.note}</p>
 			<LineChart
 				label="{m.title} over time"
 				formatY={(n) => `${Math.round(n)}`}

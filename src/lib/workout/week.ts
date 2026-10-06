@@ -178,18 +178,18 @@ export function summarizeActivity(
 ): ActivitySummary {
 	const monday = mondayOf(now);
 	const steps = activity.steps.filter((s) => s.time >= monday && s.time <= now);
-	// Per day, a whole-day total or the partial records, whichever is larger (never both).
-	const perDay = new Map<string, { full: number; partial: number }>();
+	// A whole-day total covers that day. Partials fill days that don't have one.
+	const perDay = new Map<string, { full: number | null; partial: number }>();
 	for (const s of steps) {
 		const key = s.time.toDateString();
-		const d = perDay.get(key) ?? { full: 0, partial: 0 };
+		const d = perDay.get(key) ?? { full: null, partial: 0 };
 		const isFull = !!s.end && s.end.getTime() - s.time.getTime() >= 20 * 60 * 60 * 1000;
-		if (isFull) d.full += s.count;
+		if (isFull) d.full = Math.max(d.full ?? 0, s.count);
 		else d.partial += s.count;
 		perDay.set(key, d);
 	}
 	const days = perDay.size;
-	const total = [...perDay.values()].reduce((sum, d) => sum + Math.max(d.full, d.partial), 0);
+	const total = [...perDay.values()].reduce((sum, d) => sum + (d.full ?? d.partial), 0);
 	const cardio = activity.exercise
 		.filter((e) => e.time >= monday && e.time <= now && !isLiftingSession(e, history))
 		.map((e) => ({

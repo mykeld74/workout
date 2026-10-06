@@ -7,9 +7,10 @@ import {
 	logSet
 } from '#lib/server/workouts.ts';
 import { readiness, workoutVitals } from '#lib/server/health.ts';
+import { safeTimeZone } from '#lib/workout/body-weight.ts';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ params, locals }) => {
+export const load: PageServerLoad = async ({ params, locals, cookies }) => {
 	const userId = locals.user!.id;
 	const data = await getSession(userId, Number(params.id));
 	if (!data) error(404, 'Session not found');
@@ -17,7 +18,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	return {
 		...data,
 		// Before: should today be easier? After: what the watch recorded during the workout.
-		readiness: completedAt ? null : await readiness(userId),
+		readiness: completedAt ? null : await readiness(userId, safeTimeZone(cookies.get('tz'))),
 		vitals: completedAt ? await workoutVitals(userId, startedAt, completedAt) : null
 	};
 };

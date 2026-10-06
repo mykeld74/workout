@@ -11,13 +11,43 @@ export interface DayTotal {
 const FULL_DAY_MS = 20 * 60 * 60 * 1000;
 
 /**
+ * Shortest plausible step. Health Connect's daily total often adds the phone and the watch,
+ * which lands near half this (about 0.35 m). A single source is longer.
+ */
+const SHORTEST_STEP_M = 0.5;
+
+export interface Span {
+	time: Date;
+	end?: Date | null;
+	value: number;
+}
+
+/** Same interval, allowing a second of clock noise between the two metrics. */
+function sameSpan(a: Span, b: Span): boolean {
+	if (Math.abs(a.time.getTime() - b.time.getTime()) > 1000) return false;
+	if (!a.end || !b.end) return !a.end && !b.end;
+	return Math.abs(a.end.getTime() - b.end.getTime()) < 1000;
+}
+
+/**
+ * Drops the extra copy when a step interval's distance only makes sense at half the count.
+ * No matching distance, or a normal stride, leaves the count as recorded.
+ */
+export function undoubleSteps(steps: Span[], distances: Span[]): Span[] {
+	return steps.map((s) => {
+		const meters = distances.find((d) => sameSpan(d, s))?.value;
+		if (!meters || s.value <= 0 || meters / s.value >= SHORTEST_STEP_M) return s;
+		return { ...s, value: s.value / 2 };
+	});
+}
+
+/**
  * Totals per local day over the last `days` days (including today), filling gaps with 0.
- * Health Connect often sends a whole-day total plus partial records from other sources covering
- * the same hours; adding them would double count. So each day is the larger of its whole-day
- * totals and its partial records, never both added together.
+ * A whole-day total already covers that day, so partial records are used only when there
+ * isn't one. Two whole-day totals are the same steps from two sources; keep the larger.
  */
 export function dailyTotals(
-	records: { time: Date; end?: Date | null; value: number }[],
+	records: Span[],
 	timeZone: string,
 	days: number,
 	now = new Date()
@@ -26,13 +56,16 @@ export function dailyTotals(
 	const partial = new Map<string, number>();
 	for (const r of records) {
 		const { day } = localParts(r.time, timeZone);
-		const bucket = isFullDay(r) ? full : partial;
-		bucket.set(day, (bucket.get(day) ?? 0) + r.value);
+		if (isFullDay(r)) full.set(day, Math.max(full.get(day) ?? 0, r.value));
+		else partial.set(day, (partial.get(day) ?? 0) + r.value);
 	}
-	return lastDays(days, timeZone, now).map((day) => ({
-		day,
-		value: Math.round(Math.max(full.get(day) ?? 0, partial.get(day) ?? 0))
-	}));
+	return lastDays(days, timeZone, now).map((day) => {
+		const whole = full.get(day);
+		return {
+			day,
+			value: Math.round(whole !== undefined ? whole : (partial.get(day) ?? 0))
+		};
+	});
 }
 
 export function isFullDay(r: { time: Date; end?: Date | null }): boolean {

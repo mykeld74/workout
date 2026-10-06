@@ -6,14 +6,15 @@ import {
 	readiness,
 	revokeKey
 } from '#lib/server/health.ts';
+import { safeTimeZone } from '#lib/workout/body-weight.ts';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ locals, url }) => {
+export const load: PageServerLoad = async ({ locals, url, cookies }) => {
 	const userId = locals.user!.id;
 	const [key, counts, ready] = await Promise.all([
 		keyStatus(userId),
 		metricCounts(userId),
-		readiness(userId)
+		readiness(userId, safeTimeZone(cookies.get('tz')))
 	]);
 	return { key, counts, readiness: ready, webhookUrl: `${url.origin}/api/health` };
 };

@@ -1,5 +1,11 @@
 import { fail } from '@sveltejs/kit';
-import { activitySince, dailyTrend, ignoreSession, weightsLb } from '#lib/server/health.ts';
+import {
+	activitySince,
+	dailyTrend,
+	ignoreSession,
+	restingTrend,
+	weightsLb
+} from '#lib/server/health.ts';
 import { finishedSessions, getProgress } from '#lib/server/workouts.ts';
 import { dailyTotals, sessionRows, weeklyMinutes } from '#lib/workout/activity.ts';
 import { oneWeightPerDay, safeTimeZone } from '#lib/workout/body-weight.ts';
@@ -10,18 +16,16 @@ const WEEKS = 12;
 
 export const load: PageServerLoad = async ({ locals, cookies }) => {
 	const userId = locals.user!.id;
+	const timeZone = safeTimeZone(cookies.get('tz'));
 	const since = new Date(Date.now() - (WEEKS * 7 + 1) * 24 * 60 * 60 * 1000);
 	const [progress, watchWeights, restingHr, hrv, activity, logged] = await Promise.all([
 		getProgress(userId),
 		weightsLb(userId),
-		dailyTrend(userId, 'resting_heart_rate'),
+		restingTrend(userId, timeZone),
 		dailyTrend(userId, 'hrv'),
 		activitySince(userId, since),
 		finishedSessions(userId, since)
 	]);
-
-	// Days are the user's local days (time zone cookie set by the layout).
-	const timeZone = safeTimeZone(cookies.get('tz'));
 
 	// Weights typed in after workouts plus weights from Samsung Health: one per day, the one
 	// closest to 6:00 AM.

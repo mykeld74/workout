@@ -1,14 +1,15 @@
 import { redirect } from '@sveltejs/kit';
 import { activitySince, readiness } from '#lib/server/health.ts';
+import { safeTimeZone } from '#lib/workout/body-weight.ts';
 import { createProgram, getDashboard, getProfile, startSession } from '#lib/server/workouts.ts';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, cookies }) => {
 	const userId = locals.user!.id;
 	const [profile, dashboard, ready, activity] = await Promise.all([
 		getProfile(userId),
 		getDashboard(userId),
-		readiness(userId),
+		readiness(userId, safeTimeZone(cookies.get('tz'))),
 		// Eight days covers the current week in any time zone.
 		activitySince(userId, new Date(Date.now() - 8 * 24 * 60 * 60 * 1000))
 	]);

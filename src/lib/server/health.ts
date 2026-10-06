@@ -3,6 +3,8 @@ import { and, asc, desc, eq, gte, lt, lte, sql } from 'drizzle-orm';
 import { db } from '#lib/server/db/index.ts';
 import { healthKey, healthSample } from '#lib/server/db/schema.ts';
 import { parsePayload } from '#lib/health-payload.ts';
+import { undoubleSteps } from '#lib/workout/activity.ts';
+import { restingBpmByDay } from '#lib/workout/heart.ts';
 
 /**
  * Samsung Health → Health Connect → the "Health Connect Webhook" phone app → POST /api/health.
@@ -158,11 +160,12 @@ export interface Readiness {
  * Resting HR 5+ bpm above normal, or HRV 15%+ below, suggests going easier today.
  * Needs at least 5 earlier readings to say anything.
  */
-export async function readiness(userId: string): Promise<Readiness> {
+export async function readiness(userId: string, timeZone = 'UTC'): Promise<Readiness> {
 	const now = Date.now();
 	const since = new Date(now - 15 * DAY_MS);
-	const [rhr, hrv] = await Promise.all([
-		samples(userId, 'resting_heart_rate', since),
+	const [hr, exercise, hrv] = await Promise.all([
+		samples(userId, 'heart_rate', since),
+		samples(userId, 'exercise', since),
 		samples(userId, 'hrv', since)
 	]);
 
@@ -175,7 +178,9 @@ export async function readiness(userId: string): Promise<Readiness> {
 		return { today: Math.round(today), baseline: Math.round(baseline) };
 	};
 
-	const r = compare(rhr);
+	const r = compare(
+		restingTrendFrom(hr, exercise, timeZone).map((d) => ({ time: d.date, value: d.value }))
+	);
 	const h = compare(hrv);
 	if (!r && !h) {
 		return {
@@ -192,6 +197,13 @@ export async function readiness(userId: string): Promise<Readiness> {
 	if (h && h.today <= h.baseline * 0.85)
 		reasons.push(`HRV is ${h.today} ms (usually ${h.baseline})`);
 
+	const normal =
+		r && h
+			? 'Resting heart rate and HRV look normal.'
+			: r
+				? 'Resting heart rate looks normal.'
+				: 'HRV looks normal.';
+
 	return reasons.length
 		? {
 				status: 'easy',
@@ -201,7 +213,7 @@ export async function readiness(userId: string): Promise<Readiness> {
 			}
 		: {
 				status: 'good',
-				message: 'Resting heart rate and HRV look normal. Train as planned.',
+				message: `${normal} Train as planned.`,
 				restingHr: r,
 				hrv: h
 			};
@@ -276,14 +288,19 @@ export async function workoutVitals(userId: string, start: Date, end: Date) {
 
 /** Steps, watch sessions and their calories since a date, for the weekly view and Progress. */
 export async function activitySince(userId: string, since: Date) {
-	const [steps, exercise, totals] = await Promise.all([
+	const [steps, exercise, totals, distance] = await Promise.all([
 		samples(userId, 'steps', since),
 		samples(userId, 'exercise', since),
-		samples(userId, 'total_calories', since)
+		samples(userId, 'total_calories', since),
+		samples(userId, 'distance', since)
 	]);
 	const calories = caloriesBySession(exercise, totals);
+	const counts = undoubleSteps(
+		steps.map((s) => ({ time: s.time, end: s.end, value: s.value })),
+		distance.map((d) => ({ time: d.time, end: d.end, value: d.value }))
+	);
 	return {
-		steps: steps.map((s) => ({ time: s.time, end: s.end, count: s.value })),
+		steps: counts.map((s) => ({ time: s.time, end: s.end, count: s.value })),
 		exercise: exercise.map((e) => {
 			const d = (e.detail ?? {}) as Json;
 			return {
@@ -304,8 +321,8 @@ export async function weightsLb(userId: string) {
 	return rows.map((r) => ({ date: r.time, weight: Math.round(r.value * KG_TO_LB * 10) / 10 }));
 }
 
-/** One value per day (the lowest resting HR, the average HRV) for the last 90 days. */
-export async function dailyTrend(userId: string, metric: 'resting_heart_rate' | 'hrv') {
+/** Average HRV per day for the last 90 days. */
+export async function dailyTrend(userId: string, metric: 'hrv') {
 	const rows = await samples(userId, metric, new Date(Date.now() - 90 * DAY_MS));
 	const byDay = new Map<string, number[]>();
 	for (const r of rows) {
@@ -314,9 +331,28 @@ export async function dailyTrend(userId: string, metric: 'resting_heart_rate' | 
 	}
 	return [...byDay.entries()].map(([day, values]) => ({
 		date: new Date(`${day}T12:00:00Z`),
-		value:
-			metric === 'resting_heart_rate'
-				? Math.min(...values)
-				: Math.round(values.reduce((a, b) => a + b, 0) / values.length)
+		value: Math.round(values.reduce((a, b) => a + b, 0) / values.length)
 	}));
+}
+
+function restingTrendFrom(
+	hr: { time: Date; value: number }[],
+	exercise: { time: Date; end: Date | null }[],
+	timeZone: string
+) {
+	return restingBpmByDay(
+		hr,
+		exercise.flatMap((e) => (e.end ? [{ time: e.time, end: e.end }] : [])),
+		timeZone
+	).map((d) => ({ date: new Date(`${d.day}T12:00:00Z`), value: d.value }));
+}
+
+/** Resting heart rate per local day for the last 90 days, from awake readings. */
+export async function restingTrend(userId: string, timeZone: string) {
+	const since = new Date(Date.now() - 90 * DAY_MS);
+	const [hr, exercise] = await Promise.all([
+		samples(userId, 'heart_rate', since),
+		samples(userId, 'exercise', since)
+	]);
+	return restingTrendFrom(hr, exercise, timeZone);
 }
