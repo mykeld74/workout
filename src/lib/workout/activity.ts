@@ -10,11 +10,14 @@ export interface DayTotal {
 
 const FULL_DAY_MS = 20 * 60 * 60 * 1000;
 
+/** A normal step. Shorter than this, for the same distance, means the count is inflated. */
+const NORMAL_STEP_M = 0.76;
 /**
- * Shortest plausible step. Health Connect's daily total often adds the phone and the watch,
- * which lands near half this (about 0.35 m). A single source is longer.
+ * At or under this the phone and the watch each contributed the whole interval
+ * (about half a real step). Halving is right. Between this and a normal step,
+ * they only overlap part of the interval, so halving goes too low.
  */
-const SHORTEST_STEP_M = 0.5;
+const FULL_DOUBLE_M = 0.45;
 
 export interface Span {
 	time: Date;
@@ -30,14 +33,19 @@ function sameSpan(a: Span, b: Span): boolean {
 }
 
 /**
- * Drops the extra copy when a step interval's distance only makes sense at half the count.
- * No matching distance, or a normal stride, leaves the count as recorded.
+ * Health Connect's daily total adds the phone and the watch. When they both cover the
+ * whole interval the count is about double; when they overlap only partly it lands in
+ * between. Match the distance to a normal step in that in-between case. No distance,
+ * or a stride that is already normal, leaves the count as recorded.
  */
 export function undoubleSteps(steps: Span[], distances: Span[]): Span[] {
 	return steps.map((s) => {
 		const meters = distances.find((d) => sameSpan(d, s))?.value;
-		if (!meters || s.value <= 0 || meters / s.value >= SHORTEST_STEP_M) return s;
-		return { ...s, value: s.value / 2 };
+		if (!meters || s.value <= 0) return s;
+		const stride = meters / s.value;
+		if (stride >= NORMAL_STEP_M) return s;
+		if (stride <= FULL_DOUBLE_M) return { ...s, value: s.value / 2 };
+		return { ...s, value: meters / NORMAL_STEP_M };
 	});
 }
 
