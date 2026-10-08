@@ -76,25 +76,40 @@
 		align-items: center;
 		gap: 12px;
 		flex-wrap: wrap;
-		padding: 10px 14px;
-		border-radius: var(--radius);
-		background: var(--ink);
-		color: var(--paper);
-		--accent: var(--paper);
-		--on-accent: var(--ink);
+		padding: 10px 12px 10px 16px;
+		border-radius: 16px;
+		background: var(--panel);
+		border: 1px solid var(--line);
+		color: var(--ink);
+		transition: background 0.2s ease;
 	}
 
 	.timer.done {
-		background: var(--good);
+		background: var(--lime);
+		border-color: var(--lime);
+		color: var(--on-accent);
+		--accent: var(--on-accent);
+		--on-accent: var(--lime);
 	}
 
 	.label {
-		font-weight: 600;
+		font-weight: 500;
+		font-size: 14px;
+		color: var(--ink-2);
+	}
+
+	.done .label {
+		color: inherit;
 	}
 
 	.time {
-		font: 800 36px/1 var(--display);
+		font: 700 32px/1 var(--display);
 		font-variant-numeric: tabular-nums;
+		color: var(--lime);
+	}
+
+	.done .time {
+		color: inherit;
 	}
 
 	.sound svg {

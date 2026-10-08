@@ -54,8 +54,8 @@
 	}
 
 	h1 {
-		font-size: 64px;
-		color: var(--push);
+		font-size: 44px;
+		color: var(--lime);
 	}
 
 	form {

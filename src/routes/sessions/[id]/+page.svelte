@@ -4,6 +4,7 @@
 	import { untrack } from 'svelte';
 	import Countdown from '#lib/components/Countdown.svelte';
 	import ExerciseCues from '#lib/components/ExerciseCues.svelte';
+	import Icon from '#lib/components/Icon.svelte';
 	import ReadinessNote from '#lib/components/ReadinessNote.svelte';
 	import { unlockAudio } from '#lib/alert-sound.ts';
 	import { addPending, flushPending, readPending, type PendingSet } from '#lib/offline-sets.ts';
@@ -95,11 +96,33 @@
 		return byItem;
 	});
 
-	/** Lighter week: 2 sets on lifts. */
-	function setsFor(it: (typeof data.items)[number]['item']) {
+	type Item = (typeof data.items)[number]['item'];
+
+	/** The plan's sets for today. Lighter week: 2 sets on lifts. */
+	function plannedSets(it: Item) {
 		return data.deload && it.role !== 'core' && it.role !== 'stretch'
 			? Math.min(2, it.sets)
 			: it.sets;
+	}
+
+	// Sets added during this workout ("Add a set"), per exercise. Not saved to the plan.
+	const MAX_SETS = 10;
+	let extraSets = $state<Record<number, number>>({});
+	/** Sets added (and saved to the plan) during this visit; only these can be removed again. */
+	let added = $state<Record<number, number>>({});
+	let planNote = $state<string | null>(null);
+
+	/** Highest set number logged so far (covers extra sets from before a reload). */
+	function lastLogged(itemId: number) {
+		return Math.max(0, ...Object.keys(logsByItem[itemId] ?? {}).map(Number));
+	}
+
+	/** Sets shown for an exercise: the plan's, plus any added, and never fewer than logged. */
+	function setsFor(it: Item) {
+		return Math.min(
+			MAX_SETS,
+			Math.max(plannedSets(it) + (extraSets[it.id] ?? 0), lastLogged(it.id))
+		);
 	}
 
 	function doneCount(itemId: number) {
@@ -120,9 +143,21 @@
 	const ex = $derived(current.exercise);
 	const sets = $derived(setsFor(item));
 	const logs = $derived(logsByItem[item.id] ?? {});
+	/** The plan's target with this workout's set count, e.g. "3 × 10–12" after adding a set. */
+	const shownTarget = $derived.by(() => {
+		const planned = item.sets + (added[item.id] ?? 0);
+		const rest = item.target.replace(/^\d+ × /, '');
+		return planned === 1 ? rest : `${planned} × ${rest}`;
+	});
 	const previous = $derived(data.previous[ex.id]);
 	const weighted = $derived(ex.equipment.some((e) => LOADABLE.includes(e)));
 	const unitLabel = $derived(item.unit === 'seconds' ? 'sec' : 'reps');
+	/** The first set of this exercise that isn't logged yet (null when all are). */
+	const currentSet = $derived.by(() => {
+		for (let n = 1; n <= sets; n++) if (!logs[n]) return n;
+		return null;
+	});
+
 	const allDone = $derived(data.items.every(({ item }) => doneCount(item.id) >= setsFor(item)));
 
 	/** Heaviest weight used last time on this exercise. */
@@ -159,11 +194,22 @@
 			: 'You hit the top of the range last time. Slow the lowering or add a pause.';
 	});
 
+	/** The latest logged set before this one, so every remaining set starts from what you just did. */
+	function lastBefore(setNumber: number) {
+		for (let n = setNumber - 1; n >= 1; n--) if (logs[n]) return logs[n];
+		return undefined;
+	}
+
 	function defaultWeight(setNumber: number): number | string {
-		const logged = logs[setNumber]?.weight ?? logs[setNumber - 1]?.weight;
+		const logged = logs[setNumber]?.weight ?? lastBefore(setNumber)?.weight;
 		if (logged != null) return logged;
 		if (suggested) return suggested;
 		return previous?.sets[setNumber - 1]?.weight ?? previous?.sets[0]?.weight ?? '';
+	}
+
+	/** Reps (or seconds) to start a set with: your latest logged set, else the top of the range. */
+	function defaultReps(setNumber: number): number | string {
+		return logs[setNumber]?.reps ?? lastBefore(setNumber)?.reps ?? item.repHigh ?? '';
 	}
 
 	/** The low end of the rest range: "90–120s" → 90, "60s" → 60. Null when there's no rest (stretches). */
@@ -197,8 +243,10 @@
 
 <article class="kind-{kind}">
 	<header>
-		<a class="back" href="/workouts/{data.workout.id}">← {data.workout.title}</a>
-		<span class="kicker">{index + 1} of {data.items.length}</span>
+		<a class="back" href="/workouts/{data.workout.id}"
+			><Icon name="chevronLeft" size={20} />{data.workout.title}</a
+		>
+		<span class="count">{index + 1} / {data.items.length}</span>
 	</header>
 
 	{#if summary}
@@ -301,10 +349,11 @@
 	</nav>
 
 	<section class="exercise">
-		<span class="num">{index + 1}</span>
 		<h1>{ex.name}</h1>
 		<p class="target">
-			{item.target}{#if sets < item.sets}<span class="muted"> → {sets} sets this week</span>{/if}
+			{shownTarget}{#if plannedSets(item) < item.sets}<span class="muted">
+					→ {plannedSets(item)} sets this week</span
+				>{/if}
 			{#if item.rest !== '—'}<span class="muted">&nbsp;· rest {item.rest}</span>{/if}
 		</p>
 
@@ -317,16 +366,13 @@
 		{#if progressHint}<p class="hint">{progressHint}</p>{/if}
 	</section>
 
-	{#if timer}
-		<div class="timer-slot">
-			<Countdown
-				label={timer.label}
-				seconds={timer.seconds}
-				startKey={timer.key}
-				onclose={() => (timer = null)}
-			/>
-		</div>
-	{/if}
+	<p class="set-progress" aria-live="polite">
+		{#if currentSet}
+			<strong>Set {currentSet}</strong> <span>of {sets}</span>
+		{:else}
+			<strong class="all-done"><Icon name="check" size={26} />All {sets} sets done</strong>
+		{/if}
+	</p>
 
 	<ol class="sets">
 		{#each Array.from({ length: sets }, (_, i) => i + 1) as setNumber (setNumber)}
@@ -389,7 +435,13 @@
 				>
 					<input type="hidden" name="workoutExerciseId" value={item.id} />
 					<input type="hidden" name="setNumber" value={setNumber} />
-					<span class="set-label">Set {setNumber}</span>
+					<span class="set-label" class:next={setNumber === currentSet}>
+						{#if logged}<Icon
+								name="check"
+								size={18}
+								label="Set {setNumber} logged"
+							/>{:else}{setNumber}{/if}
+					</span>
 					{#if weighted}
 						<label>
 							<span class="sr-only">Set {setNumber} weight in pounds</span>
@@ -412,7 +464,7 @@
 							inputmode="numeric"
 							min="0"
 							placeholder={unitLabel}
-							value={logged?.reps ?? item.repHigh ?? ''}
+							value={defaultReps(setNumber)}
 						/>
 					</label>
 					<button class="btn small" class:ghost={!!logged} disabled={finished}>
@@ -435,15 +487,70 @@
 			</li>
 		{/each}
 	</ol>
+	{#if !finished}
+		<!-- Adding or removing a set here also updates the plan, so next time it's there too. -->
+		<form
+			class="set-tools"
+			method="post"
+			action="?/sets"
+			use:enhance={({ formData }) => {
+				const id = item.id;
+				const delta = formData.get('delta') === '-1' ? -1 : 1;
+				extraSets[id] = (extraSets[id] ?? 0) + delta;
+				added[id] = (added[id] ?? 0) + delta;
+				planNote = null;
+				return async ({ result }) => {
+					if (result.type === 'failure' && result.status === 409) {
+						// An older plan: the set stays for this workout, the current plan is left alone.
+						planNote = "Changed for this workout only — it's from an earlier plan.";
+					} else if (result.type !== 'success') {
+						extraSets[id] = (extraSets[id] ?? 0) - delta;
+						added[id] = (added[id] ?? 0) - delta;
+						planNote = "Couldn't change the sets. Try again.";
+					}
+				};
+			}}
+		>
+			<input type="hidden" name="workoutExerciseId" value={item.id} />
+			{#if sets < MAX_SETS}
+				<button class="btn ghost small" name="delta" value="1">
+					<Icon name="plus" size={18} />Add a set
+				</button>
+			{/if}
+			{#if (added[item.id] ?? 0) > 0 && !logs[sets]}
+				<button class="linkish" name="delta" value="-1">Remove set {sets}</button>
+			{/if}
+		</form>
+		{#if planNote}<p class="muted plan-note" role="status">{planNote}</p>{/if}
+	{/if}
 	{#if form?.message}<p class="error" role="alert">{form.message}</p>{/if}
 
-	<div class="pager">
-		<button type="button" class="btn ghost" disabled={index === 0} onclick={() => go(index - 1)}
-			>← Prev</button
-		>
-		{#if index < data.items.length - 1}
-			<button type="button" class="btn" onclick={() => go(index + 1)}>Next →</button>
+	<!-- Pinned to the bottom of the screen: rest timer and moving between exercises. -->
+	<div class="dock">
+		{#if timer}
+			<Countdown
+				label={timer.label}
+				seconds={timer.seconds}
+				startKey={timer.key}
+				onclose={() => (timer = null)}
+			/>
 		{/if}
+		<div class="pager">
+			<button
+				type="button"
+				class="btn ghost"
+				disabled={index === 0}
+				onclick={() => go(index - 1)}
+				aria-label="Previous exercise"><Icon name="chevronLeft" size={20} /></button
+			>
+			{#if index < data.items.length - 1}
+				<button type="button" class="btn next-btn" onclick={() => go(index + 1)}>
+					Next: {data.items[index + 1].exercise.name}<Icon name="chevronRight" size={20} />
+				</button>
+			{:else if !finished}
+				<a class="btn next-btn" href="#finish">Finish up<Icon name="check" size={20} /></a>
+			{/if}
+		</div>
 	</div>
 
 	<div class="howto-slot">
@@ -451,7 +558,7 @@
 	</div>
 
 	{#if !finished && (index === data.items.length - 1 || allDone)}
-		<section class="finish card">
+		<section class="finish card" id="finish">
 			<h2>{allDone ? 'All sets logged' : 'Finish up'}</h2>
 			<form
 				method="post"
@@ -515,30 +622,43 @@
 	}
 
 	.back {
-		font-weight: 600;
-		text-decoration: none;
-		color: var(--accent);
-		min-height: 44px;
 		display: flex;
 		align-items: center;
+		gap: 4px;
+		min-height: 44px;
+		margin-left: -6px;
+		font-weight: 500;
+		text-decoration: none;
+		color: var(--ink-2);
 	}
 
+	.count {
+		padding: 6px 12px;
+		border-radius: 999px;
+		background: var(--wash);
+		font-size: 14px;
+		font-weight: 600;
+		font-variant-numeric: tabular-nums;
+	}
+
+	/* Summary */
 	.summary {
-		border-top: 6px solid var(--accent);
 		margin: 4px 0 20px;
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
+		gap: 14px;
 		align-items: flex-start;
+		padding: 20px;
+		border-radius: 20px;
 	}
 
 	.summary h2 {
-		font-size: 40px;
-		color: var(--accent);
+		font-size: var(--hero);
+		color: var(--lime);
 	}
 
 	.summary h3 {
-		font: 700 22px/1 var(--display);
+		font-size: var(--h3);
 		margin-top: 4px;
 	}
 
@@ -552,8 +672,8 @@
 
 	.stats div {
 		background: var(--wash);
-		border-radius: 8px;
-		padding: 10px 12px;
+		border-radius: 12px;
+		padding: 12px 14px;
 	}
 
 	.stats dt {
@@ -562,8 +682,8 @@
 	}
 
 	.stats dd {
-		margin: 2px 0 0;
-		font: 800 26px/1.1 var(--display);
+		margin: 4px 0 0;
+		font: 700 24px/1.1 var(--display);
 	}
 
 	.watch-note {
@@ -587,7 +707,7 @@
 		display: flex;
 		justify-content: space-between;
 		gap: 12px;
-		padding: 8px 0;
+		padding: 10px 0;
 		border-bottom: 1px solid var(--line);
 	}
 
@@ -597,8 +717,8 @@
 		align-items: center;
 		gap: 8px 12px;
 		margin: 4px 0 12px;
-		padding: 10px 14px;
-		border-radius: var(--radius);
+		padding: 12px 14px;
+		border-radius: 12px;
 		background: var(--wash);
 		font-size: 15px;
 	}
@@ -614,10 +734,11 @@
 		color: var(--ink-2);
 	}
 
+	/* Progress through the workout */
 	.strip {
 		display: flex;
 		gap: 4px;
-		margin: 8px 0 18px;
+		margin: 6px 0 18px;
 	}
 
 	.pip {
@@ -633,80 +754,105 @@
 	.pip::after {
 		content: '';
 		position: absolute;
-		inset: 10px 0;
+		inset: 11px 0;
 		border-radius: 4px;
 		background: var(--line);
+		transition: background 0.2s ease;
 	}
 
 	.pip.complete::after {
-		background: var(--accent);
-		opacity: 0.45;
+		background: color-mix(in srgb, var(--lime) 45%, var(--line));
 	}
 
 	.pip.current::after {
-		background: var(--accent);
-		opacity: 1;
-		inset: 7px 0;
+		background: var(--lime);
+		inset: 9px 0;
 	}
 
+	/* The exercise */
 	.exercise {
-		border-bottom: 4px solid var(--accent);
-		padding-bottom: 14px;
-	}
-
-	.num {
-		font: 800 28px/1 var(--display);
-		color: var(--accent);
+		padding-bottom: 4px;
 	}
 
 	h1 {
-		font-size: 48px;
-		margin-top: 2px;
+		font-size: var(--h1);
 	}
 
 	.target {
-		font-weight: 600;
-		font-size: 18px;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: 4px;
 		margin: 8px 0 10px;
+		font-weight: 600;
+		font-size: 17px;
 	}
 
 	.last {
 		margin: 12px 0 0;
 		font-size: 15px;
+		color: var(--ink-2);
+	}
+
+	.last strong {
+		color: var(--ink);
 	}
 
 	.hint {
-		margin: 6px 0 0;
+		margin: 8px 0 0;
+		padding: 10px 12px;
+		border-radius: 12px;
+		background: color-mix(in srgb, var(--lime) 12%, transparent);
+		color: var(--lime);
 		font-weight: 600;
-		color: var(--good);
+		font-size: 15px;
 	}
 
-	.timer-slot {
-		position: sticky;
-		top: 8px;
-		z-index: 2;
-		margin-top: 14px;
+	.set-progress {
+		display: flex;
+		align-items: baseline;
+		gap: 8px;
+		margin: 18px 0 10px;
+		font-size: 18px;
+		color: var(--ink-2);
 	}
 
+	.set-progress strong {
+		font: 700 var(--hero) / 1 var(--display);
+		color: var(--ink);
+	}
+
+	.all-done {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		color: var(--lime) !important;
+		font-size: var(--h2) !important;
+	}
+
+	/* Sets */
 	.sets {
 		list-style: none;
-		margin: 16px 0 0;
+		margin: 0;
 		padding: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
+		gap: 10px;
 	}
 
 	.sets li {
-		border: 1.5px solid var(--line-strong);
-		border-radius: var(--radius);
+		border: 1px solid var(--line);
+		border-radius: 16px;
 		background: var(--panel);
-		padding: 10px 12px;
+		padding: 10px;
+		transition:
+			border-color 0.2s ease,
+			background 0.2s ease;
 	}
 
 	.sets li.logged {
-		border-color: var(--accent);
-		background: var(--wash);
+		border-color: color-mix(in srgb, var(--lime) 40%, var(--line));
+		background: color-mix(in srgb, var(--lime) 6%, var(--panel));
 	}
 
 	.sets form {
@@ -716,9 +862,38 @@
 	}
 
 	.set-label {
-		font: 700 20px/1 var(--display);
-		min-width: 52px;
-		color: var(--accent);
+		display: grid;
+		place-items: center;
+		flex-shrink: 0;
+		width: 40px;
+		height: 40px;
+		border-radius: 50%;
+		background: var(--wash);
+		font: 700 17px/1 var(--display);
+		color: var(--ink-2);
+	}
+
+	.set-label.next {
+		background: var(--ink);
+		color: var(--paper);
+	}
+
+	.logged .set-label {
+		background: var(--lime);
+		color: var(--on-accent);
+		animation: pop 0.3s ease;
+	}
+
+	@keyframes pop {
+		0% {
+			transform: scale(0.6);
+		}
+		60% {
+			transform: scale(1.15);
+		}
+		100% {
+			transform: scale(1);
+		}
 	}
 
 	.sets label {
@@ -727,9 +902,16 @@
 	}
 
 	.sets input {
+		min-height: 54px;
 		text-align: center;
-		font-size: 20px;
+		font-size: 22px;
 		font-weight: 600;
+		font-variant-numeric: tabular-nums;
+		background: var(--paper);
+	}
+
+	.sets .btn {
+		min-height: 54px;
 	}
 
 	.hold {
@@ -737,29 +919,70 @@
 		width: 100%;
 	}
 
-	.pager {
+	.set-tools {
 		display: flex;
-		justify-content: space-between;
-		gap: 10px;
-		margin-top: 20px;
+		align-items: center;
+		gap: 12px;
+		margin-top: 10px;
 	}
 
-	.pager .btn {
+	.plan-note {
+		margin: 6px 0 0;
+		font-size: 13px;
+	}
+
+	/* Bottom dock */
+	.dock {
+		position: sticky;
+		bottom: 0;
+		z-index: 5;
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		margin: 20px -16px 0;
+		padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+		background: color-mix(in srgb, var(--paper) 90%, transparent);
+		backdrop-filter: blur(12px);
+		border-top: 1px solid var(--line);
+	}
+
+	.pager {
+		display: flex;
+		gap: 10px;
+	}
+
+	.pager .btn.ghost {
+		width: 54px;
+		padding: 0;
+		flex-shrink: 0;
+	}
+
+	.next-btn {
 		flex: 1;
+		min-width: 0;
+		justify-content: space-between;
+	}
+
+	.next-btn {
+		overflow: hidden;
+		white-space: nowrap;
+		text-overflow: ellipsis;
 	}
 
 	.howto-slot {
 		margin-top: 16px;
 	}
 
+	/* Finish */
 	.finish {
 		margin-top: 24px;
-		border-top: 6px solid var(--accent);
+		padding: 20px;
+		border-radius: 20px;
 	}
 
 	.finish h2 {
-		font-size: 30px;
-		margin-bottom: 12px;
+		font-size: var(--h2);
+		margin-bottom: 14px;
 	}
 
 	.finish form {
@@ -802,9 +1025,6 @@
 	}
 
 	@media (max-width: 480px) {
-		h1 {
-			font-size: 40px;
-		}
 		.finish-fields {
 			grid-template-columns: 1fr;
 		}

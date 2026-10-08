@@ -105,7 +105,7 @@
 	}
 
 	h2 {
-		font-size: 28px;
+		font-size: var(--h2);
 	}
 
 	.streak {

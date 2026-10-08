@@ -261,8 +261,12 @@
 
 <style>
 	header {
-		border-bottom: 4px solid var(--accent);
-		padding-bottom: 12px;
+		border-bottom: 1px solid var(--line);
+		padding-bottom: 14px;
+	}
+
+	header .kicker {
+		color: var(--kind);
 	}
 
 	.title-row {
@@ -273,13 +277,12 @@
 	}
 
 	h1 {
-		font-size: 64px;
-		color: var(--accent);
+		font-size: var(--h1);
 	}
 
 	.focus {
 		margin: 6px 0 0;
-		font-weight: 500;
+		color: var(--ink-2);
 	}
 
 	.warmup {
@@ -307,7 +310,7 @@
 	}
 
 	.num {
-		font: 700 32px/1 var(--display);
+		font: 700 22px/1 var(--display);
 		color: var(--accent);
 	}
 
@@ -464,7 +467,7 @@
 	}
 
 	.add h2 {
-		font: 700 26px/1 var(--display);
+		font: 700 var(--h2)/1.1 var(--display);
 	}
 
 	.add-list {

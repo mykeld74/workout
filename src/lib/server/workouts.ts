@@ -529,6 +529,24 @@ async function renumber(workoutId: number, order?: number[]) {
 		.where(inArray(workoutExercise.id, ids));
 }
 
+/**
+ * Adds (+1) or removes (−1) a set on one exercise in the active plan, keeping its target text
+ * ("3 × 8–12", "2 × max − 2", "30s / side") otherwise as it was. Returns the new set count,
+ * or null if the exercise isn't in the active plan.
+ */
+export async function changeSets(userId: string, workoutExerciseId: number, delta: 1 | -1) {
+	const row = await ownedItem(userId, workoutExerciseId);
+	if (!row) return null;
+	const sets = Math.min(10, Math.max(1, row.item.sets + delta));
+	if (sets === row.item.sets) return sets;
+	const rest = row.item.target.replace(/^\d+ × /, '');
+	await db
+		.update(workoutExercise)
+		.set({ sets, target: sets === 1 ? rest : `${sets} × ${rest}` })
+		.where(eq(workoutExercise.id, workoutExerciseId));
+	return sets;
+}
+
 /** Changes sets and the rep (or seconds) range for one exercise in the plan. */
 export async function updateTarget(
 	userId: string,

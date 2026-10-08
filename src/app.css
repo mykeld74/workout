@@ -1,47 +1,43 @@
+/* Night shift: dark-first, high contrast, one bright accent (lime) for actions and progress.
+   Workout types keep their own colors, used only for small markers. */
 :root {
-	--paper: #fbfaf7;
-	--panel: #ffffff;
-	--wash: #efece5;
-	--ink: #1c1b19;
-	--ink-2: #5c5850;
-	--line: #c9c4b8;
-	--line-strong: #3a3833;
-	--push: #b8430f;
-	--pull: #1f4fa8;
-	--mobility: #2f6b3a;
-	--chart: #1f4fa8;
-	/* Two-series charts (validated pair: lifting, cardio). */
-	--chart-lift: #b8430f;
-	--chart-cardio: #1f4fa8;
-	--accent: var(--ink);
-	--on-accent: #ffffff;
-	--danger: #a32020;
-	--good: #2f6b3a;
-	--radius: 10px;
-	--display: 'Barlow Condensed', 'Arial Narrow', sans-serif;
-	--body: 'Barlow', system-ui, sans-serif;
-	color-scheme: light;
+	--paper: #101114;
+	--panel: #1a1c21;
+	--wash: #23262c;
+	--ink: #f2f3f5;
+	--ink-2: #9ba1ab;
+	--line: #2b2f36;
+	--line-strong: #4b505a;
+	--lime: #c6f36a;
+	--push: #ff9b6b;
+	--pull: #7cc4ff;
+	--mobility: #6fe0b0;
+	--chart: #c6f36a;
+	/* Two-series charts (validated pair on this surface: lifting, cardio). */
+	--chart-lift: #d8703f;
+	--chart-cardio: #5e8be3;
+	--accent: var(--lime);
+	--kind: var(--ink-2);
+	--on-accent: #101114;
+	--danger: #ff7a7a;
+	--good: #c6f36a;
+	--radius: 14px;
+	--radius-sm: 10px;
+	--display: 'Space Grotesk', system-ui, sans-serif;
+	--body: 'Space Grotesk', system-ui, sans-serif;
+	/* Type scale */
+	--h1: 34px;
+	--h2: 22px;
+	--h3: 18px;
+	--hero: 30px;
+	color-scheme: dark;
 }
 
-@media (prefers-color-scheme: dark) {
+@media (min-width: 768px) {
 	:root {
-		--paper: #161512;
-		--panel: #201f1b;
-		--wash: #2a2924;
-		--ink: #f1eee7;
-		--ink-2: #aaa59a;
-		--line: #3d3b35;
-		--line-strong: #8b8679;
-		--push: #f08a54;
-		--pull: #7ea6f2;
-		--mobility: #7fc28c;
-		--chart: #7ea6f2;
-		--chart-lift: #d8703f;
-		--chart-cardio: #5e8be3;
-		--on-accent: #161512;
-		--danger: #f07a7a;
-		--good: #7fc28c;
-		color-scheme: dark;
+		--h1: 42px;
+		--h2: 24px;
+		--hero: 34px;
 	}
 }
 
@@ -68,10 +64,10 @@ h1,
 h2,
 h3 {
 	font-family: var(--display);
-	font-weight: 800;
-	line-height: 0.95;
+	font-weight: 700;
+	line-height: 1.05;
 	margin: 0;
-	letter-spacing: 0.01em;
+	letter-spacing: -0.02em;
 }
 
 a {
@@ -79,9 +75,9 @@ a {
 }
 
 .kicker {
-	font-size: 13px;
-	font-weight: 600;
-	letter-spacing: 0.14em;
+	font-size: 12px;
+	font-weight: 500;
+	letter-spacing: 0.12em;
 	text-transform: uppercase;
 	color: var(--ink-2);
 }
@@ -91,13 +87,13 @@ a {
 }
 
 .kind-push {
-	--accent: var(--push);
+	--kind: var(--push);
 }
 .kind-pull {
-	--accent: var(--pull);
+	--kind: var(--pull);
 }
 .kind-mobility {
-	--accent: var(--mobility);
+	--kind: var(--mobility);
 }
 
 .btn {
@@ -106,19 +102,27 @@ a {
 	justify-content: center;
 	gap: 8px;
 	min-height: 48px;
-	padding: 0 20px;
-	border-radius: var(--radius);
+	padding: 0 22px;
+	border-radius: 999px;
 	border: 2px solid var(--accent);
 	background: var(--accent);
 	color: var(--on-accent);
-	font: 600 17px/1 var(--body);
+	font: 600 16px/1 var(--body);
 	text-decoration: none;
 	cursor: pointer;
+	transition:
+		transform 0.1s ease,
+		background 0.15s ease;
+}
+
+.btn:active {
+	transform: scale(0.97);
 }
 
 .btn.ghost {
 	background: transparent;
 	color: var(--accent);
+	border-color: var(--line-strong);
 }
 
 .btn.small {
@@ -141,6 +145,12 @@ a:focus-visible {
 	outline-offset: 2px;
 }
 
+input:focus,
+select:focus,
+textarea:focus {
+	border-color: var(--accent);
+}
+
 input,
 select,
 textarea {
@@ -148,7 +158,7 @@ textarea {
 	color: var(--ink);
 	background: var(--panel);
 	border: 1.5px solid var(--line-strong);
-	border-radius: 8px;
+	border-radius: var(--radius-sm);
 	padding: 10px 12px;
 	min-height: 46px;
 	width: 100%;
@@ -164,7 +174,7 @@ label {
 
 .card {
 	background: var(--panel);
-	border: 1.5px solid var(--line);
+	border: 1px solid var(--line);
 	border-radius: var(--radius);
 	padding: 16px;
 }
@@ -181,4 +191,13 @@ label {
 	overflow: hidden;
 	clip: rect(0 0 0 0);
 	white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		transition-duration: 0.01ms !important;
+		animation-duration: 0.01ms !important;
+	}
 }

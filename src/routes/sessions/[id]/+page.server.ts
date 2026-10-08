@@ -1,5 +1,6 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import {
+	changeSets,
 	clearSet,
 	discardSession,
 	finishSession,
@@ -39,7 +40,13 @@ export const actions: Actions = {
 		const setNumber = Number(form.get('setNumber'));
 		const weight = optionalNumber(form.get('weight'));
 		const reps = optionalNumber(form.get('reps'));
-		if (weight === undefined || reps === undefined || !Number.isInteger(setNumber)) {
+		if (
+			weight === undefined ||
+			reps === undefined ||
+			!Number.isInteger(setNumber) ||
+			setNumber < 1 ||
+			setNumber > 10
+		) {
 			return fail(400, { message: 'Enter numbers only.' });
 		}
 		const ok = await logSet(
@@ -52,6 +59,14 @@ export const actions: Actions = {
 		);
 		if (!ok) return fail(404, { message: 'Exercise not found in this session.' });
 		return { logged: { workoutExerciseId, setNumber } };
+	},
+	/** "Add a set" / "Remove set" during a workout also updates the plan. */
+	sets: async ({ request, locals }) => {
+		const form = await request.formData();
+		const delta = form.get('delta') === '-1' ? -1 : 1;
+		const sets = await changeSets(locals.user!.id, Number(form.get('workoutExerciseId')), delta);
+		if (sets === null) return fail(409, { planNotUpdated: true });
+		return { planSets: sets };
 	},
 	clear: async ({ request, params, locals }) => {
 		const form = await request.formData();

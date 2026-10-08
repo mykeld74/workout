@@ -95,7 +95,7 @@
 
 	.frame {
 		position: relative;
-		border-radius: 8px;
+		border-radius: 12px;
 		overflow: hidden;
 		background: #fff;
 		aspect-ratio: 4 / 3;

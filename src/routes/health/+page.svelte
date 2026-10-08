@@ -195,11 +195,11 @@
 	}
 
 	h1 {
-		font-size: 56px;
+		font-size: var(--h1);
 	}
 
 	h2 {
-		font-size: 26px;
+		font-size: var(--h2);
 		margin-bottom: 8px;
 	}
 

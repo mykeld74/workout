@@ -498,11 +498,11 @@
 	}
 
 	h1 {
-		font-size: 56px;
+		font-size: var(--h1);
 	}
 
 	h2 {
-		font-size: 28px;
+		font-size: var(--h2);
 		margin-bottom: 10px;
 	}
 
@@ -559,7 +559,7 @@
 
 	.figure {
 		margin: 2px 0 0;
-		font: 600 28px/1.1 var(--body);
+		font: 600 24px/1.15 var(--body);
 	}
 
 	.chart-title {
@@ -593,9 +593,9 @@
 	}
 
 	.period button[aria-pressed='true'] {
-		border-color: var(--ink);
-		background: var(--ink);
-		color: var(--paper);
+		border-color: var(--lime);
+		background: var(--lime);
+		color: var(--on-accent);
 	}
 
 	@media (min-width: 800px) {

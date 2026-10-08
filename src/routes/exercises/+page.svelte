@@ -180,11 +180,11 @@
 	}
 
 	h1 {
-		font-size: 56px;
+		font-size: var(--h1);
 	}
 
 	h2 {
-		font-size: 26px;
+		font-size: var(--h2);
 	}
 
 	.import {
@@ -273,8 +273,8 @@
 	}
 
 	.pref.on {
-		border-color: var(--ink);
-		color: var(--ink);
+		border-color: var(--lime);
+		color: var(--lime);
 		background: var(--wash);
 	}
 

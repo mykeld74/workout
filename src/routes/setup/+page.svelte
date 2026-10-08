@@ -124,6 +124,12 @@
 			or blood-pressure concerns.
 		</p>
 	</form>
+
+	{#if !data.isNew}
+		<form method="post" action="/login?/signOut" class="sign-out">
+			<button class="btn ghost">Sign out</button>
+		</form>
+	{/if}
 </section>
 
 <style>
@@ -134,7 +140,7 @@
 	}
 
 	h1 {
-		font-size: 56px;
+		font-size: var(--h1);
 	}
 
 	form {
@@ -146,6 +152,12 @@
 
 	.age {
 		max-width: 220px;
+	}
+
+	.sign-out {
+		margin-top: 12px;
+		padding-top: 20px;
+		border-top: 1px solid var(--line);
 	}
 
 	.connect {
@@ -195,8 +207,8 @@
 	}
 
 	.choice:has(input:checked) {
-		border-color: var(--ink);
-		background: var(--wash);
+		border-color: var(--lime);
+		background: color-mix(in srgb, var(--lime) 8%, var(--panel));
 	}
 
 	.choice input {
@@ -204,7 +216,7 @@
 		height: 20px;
 		min-height: 0;
 		margin: 0;
-		accent-color: var(--ink);
+		accent-color: var(--lime);
 	}
 
 	.choice small {
