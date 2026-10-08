@@ -44,7 +44,7 @@
 
 {#if data.user}
 	<header class:open={menuOpen}>
-		<a class="brand" href="/">PUSH / PULL</a>
+		<a class="brand" href="/">Workout Builder</a>
 		<button
 			type="button"
 			class="menu-button"

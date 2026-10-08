@@ -1,6 +1,6 @@
 {
-	"name": "Push / Pull Workout Builder",
-	"short_name": "Push / Pull",
+	"name": "Workout Builder",
+	"short_name": "Workout Builder",
 	"description": "Workout plans built around your age and the equipment you own.",
 	"id": "/",
 	"start_url": "/",

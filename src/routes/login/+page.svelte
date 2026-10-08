@@ -7,8 +7,7 @@
 </script>
 
 <section>
-	<p class="kicker">Workout builder</p>
-	<h1>PUSH / PULL</h1>
+	<h1>Workout Builder</h1>
 	<p class="muted">Plans built around your age and the equipment you own.</p>
 
 	<form method="post" action="?/{mode}" use:enhance class="card">

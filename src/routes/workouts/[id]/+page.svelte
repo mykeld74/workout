@@ -41,7 +41,7 @@
 		<div class="title-row">
 			<div>
 				<p class="kicker">
-					{isMobility ? 'Daily add-on' : `Push / Pull · Week ${data.program.week}`}
+					{isMobility ? 'Daily add-on' : `Workout Builder · Week ${data.program.week}`}
 				</p>
 				<h1>{data.workout.title}</h1>
 			</div>
