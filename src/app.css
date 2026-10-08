@@ -9,13 +9,15 @@
 	--line: #2b2f36;
 	--line-strong: #4b505a;
 	--lime: #c6f36a;
-	--push: #ff9b6b;
-	--pull: #7cc4ff;
-	--mobility: #6fe0b0;
+	/* One orange and one blue across the app (the Progress chart pair, contrast-checked on these surfaces). */
+	--push: #d8703f;
+	--pull: #5e8be3;
+	/* Ice blue: lighter than --pull so the two stay apart, and well clear of the lime accent. */
+	--mobility: #8fd8ec;
 	--chart: #c6f36a;
 	/* Two-series charts (validated pair on this surface: lifting, cardio). */
-	--chart-lift: #d8703f;
-	--chart-cardio: #5e8be3;
+	--chart-lift: var(--push);
+	--chart-cardio: var(--pull);
 	--accent: var(--lime);
 	--kind: var(--ink-2);
 	--on-accent: #101114;

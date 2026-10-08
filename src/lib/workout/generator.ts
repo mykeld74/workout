@@ -393,7 +393,7 @@ export function generateProgram(opts: GenerateOptions): PlannedProgram {
 		workouts.push({
 			kind: 'mobility',
 			variant,
-			title: `Mobility + core ${variant}`,
+			title: `Mobility + Core ${variant}`,
 			focus: DAY_INFO.mobility,
 			warmup:
 				'Rotate A → B → C, one a day, away from lifting time. Stretch to mild tension, never pain. After a hard lift, stretches only is fine.',

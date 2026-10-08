@@ -137,7 +137,7 @@
 </section>
 
 <section>
-	<h2>Mobility + core</h2>
+	<h2>Mobility + Core</h2>
 	<p class="muted sub">12–14 minutes, one a day, away from lifting time.</p>
 	<ul class="list">
 		{#each mobility as w (w.id)}

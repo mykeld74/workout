@@ -765,7 +765,7 @@ const BASE: ExerciseDef[] = [
 		cues: ['Hike the bell back between thighs', 'Snap hips forward; arms just guide']
 	}),
 
-	// Mobility + core A
+	// Mobility + Core A
 	stretch({
 		id: 'cat-cow',
 		name: 'Cat-cow',
@@ -875,7 +875,7 @@ const BASE: ExerciseDef[] = [
 		unilateral: true,
 		cues: ['Band anchored to your side, chest high', 'Press out and resist the twist']
 	}),
-	// Mobility + core B
+	// Mobility + Core B
 	stretch({
 		id: 'deep-squat-hold',
 		name: 'Deep squat hold',
@@ -984,7 +984,7 @@ const BASE: ExerciseDef[] = [
 		reps: [10, 10],
 		cues: ['Curl knees toward chest', 'Lift hips slightly, lower slowly']
 	}),
-	// Mobility + core C
+	// Mobility + Core C
 	stretch({
 		id: 'thread-the-needle',
 		name: 'Thread the needle',
