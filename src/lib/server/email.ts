@@ -1,4 +1,5 @@
-import { MAIL_FROM, RESEND_API_KEY } from '$app/env/private';
+import { MAIL_FROM, ORIGIN, RESEND_API_KEY } from '$app/env/private';
+import { emailLayout } from '#lib/server/email-template.ts';
 
 interface Mail {
 	to: string;
@@ -21,19 +22,22 @@ export async function sendMail(mail: Mail): Promise<void> {
 	if (!res.ok) throw new Error(`Resend ${res.status}: ${await res.text()}`);
 }
 
-function escape(s: string): string {
-	return s.replace(
-		/[&<>"]/g,
-		(c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!
-	);
-}
-
 export function resetPasswordMail(to: string, name: string, url: string): Mail {
 	const hi = name ? `Hi ${name},` : 'Hi,';
+	const intro = [hi, 'Tap the button to choose a new password. The link works once, for one hour.'];
+	const outro = ["Didn't ask for this? Ignore this email and your password stays the same."];
 	return {
 		to,
 		subject: 'Reset your Workout Builder password',
-		text: `${hi}\n\nUse this link to choose a new password. It works for one hour.\n\n${url}\n\nIf you didn't ask for this, you can ignore this email.`,
-		html: `<p>${escape(hi)}</p><p>Use this link to choose a new password. It works for one hour.</p><p><a href="${escape(url)}">Choose a new password</a></p><p>If you didn't ask for this, you can ignore this email.</p>`
+		text: `${intro.join('\n\n')}\n\n${url}\n\n${outro.join('\n\n')}`,
+		html: emailLayout({
+			origin: ORIGIN,
+			preheader: 'Your link to choose a new password. It works for one hour.',
+			title: 'Reset your password',
+			intro,
+			button: { label: 'Choose a new password', url },
+			outro,
+			footer: 'You got this because a password reset was requested for this email'
+		})
 	};
 }
