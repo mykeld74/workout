@@ -4,12 +4,20 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { sveltekitCookies } from 'better-auth/svelte-kit';
 import { getRequestEvent } from '$app/server';
 import { db } from '#lib/server/db/index.ts';
+import { resetPasswordMail, sendMail } from '#lib/server/email.ts';
 
 export const auth = betterAuth({
 	baseURL: ORIGIN,
 	secret: BETTER_AUTH_SECRET,
 	database: drizzleAdapter(db, { provider: 'pg' }),
-	emailAndPassword: { enabled: true },
+	emailAndPassword: {
+		enabled: true,
+		// Links land on /reset-password; a reset signs out every other device.
+		sendResetPassword: async ({ user, url }) => {
+			await sendMail(resetPasswordMail(user.email, user.name, url));
+		},
+		revokeSessionsOnPasswordReset: true
+	},
 	session: {
 		// Keep the signed-in check in a signed cookie for 5 minutes instead of asking the
 		// database on every request (each round-trip to Neon is ~50–200 ms).

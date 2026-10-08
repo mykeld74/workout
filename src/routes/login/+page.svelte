@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { page } from '$app/state';
 	import type { PageProps } from './$types';
 
 	let { form }: PageProps = $props();
@@ -9,6 +10,10 @@
 <section>
 	<h1>Workout Builder</h1>
 	<p class="muted">Plans built around your age and the equipment you own.</p>
+
+	{#if page.url.searchParams.has('reset') && !form}
+		<p class="note" role="status">Password updated. Sign in with the new one.</p>
+	{/if}
 
 	<form method="post" action="?/{mode}" use:enhance class="card">
 		{#if mode === 'signUp'}
@@ -31,6 +36,7 @@
 				autocomplete={mode === 'signUp' ? 'new-password' : 'current-password'}
 			/>
 		</label>
+		{#if mode === 'signIn'}<a class="forgot" href="/reset-password">Forgot password?</a>{/if}
 		{#if form?.message}<p class="error" role="alert">{form.message}</p>{/if}
 		<button class="btn">{mode === 'signIn' ? 'Sign in' : 'Create account'}</button>
 	</form>
@@ -63,6 +69,21 @@
 		flex-direction: column;
 		gap: 14px;
 		margin-top: 12px;
+	}
+
+	.note {
+		margin-top: 12px;
+		padding: 10px 14px;
+		border-radius: var(--radius-sm);
+		background: var(--wash);
+		border: 1px solid var(--line-strong);
+	}
+
+	.forgot {
+		align-self: flex-end;
+		margin-top: -6px;
+		font-size: 14px;
+		color: var(--ink-2);
 	}
 
 	.link {

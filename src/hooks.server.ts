@@ -16,7 +16,7 @@ const handleBetterAuth: Handle = async ({ event, resolve }) => {
 };
 
 // /api/health checks its own key (sent by the phone app, which has no login session).
-const PUBLIC_PATHS = ['/login', '/api/auth', '/api/health', '/demo'];
+const PUBLIC_PATHS = ['/login', '/reset-password', '/api/auth', '/api/health', '/demo'];
 
 /** Everything except the login page requires a signed-in user — including form actions. */
 const requireUser: Handle = ({ event, resolve }) => {
