@@ -7,17 +7,21 @@ import {
 	weightsLb
 } from '#lib/server/health.ts';
 import { finishedSessions, getProgress } from '#lib/server/workouts.ts';
-import { dailyTotals, sessionRows, weeklyMinutes } from '#lib/workout/activity.ts';
+import { dailyTotals, sessionRows, workoutMinutes } from '#lib/workout/activity.ts';
 import { oneWeightPerDay, safeTimeZone } from '#lib/workout/body-weight.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 const DAYS = 30;
 const WEEKS = 12;
+const MONTHS = 12;
 
 export const load: PageServerLoad = async ({ locals, cookies }) => {
 	const userId = locals.user!.id;
 	const timeZone = safeTimeZone(cookies.get('tz'));
-	const since = new Date(Date.now() - (WEEKS * 7 + 1) * 24 * 60 * 60 * 1000);
+	const dayMs = 24 * 60 * 60 * 1000;
+	// A year so the month view has a full range. The session list stays on the shorter window.
+	const since = new Date(Date.now() - 370 * dayMs);
+	const recent = new Date(Date.now() - (WEEKS * 7 + 1) * dayMs);
 	const [progress, watchWeights, restingHr, hrv, activity, logged] = await Promise.all([
 		getProgress(userId),
 		weightsLb(userId),
@@ -58,8 +62,16 @@ export const load: PageServerLoad = async ({ locals, cookies }) => {
 				timeZone,
 				DAYS
 			),
-			weeks: weeklyMinutes(activity.exercise, logged, timeZone, WEEKS),
-			sessions: sessionRows(activity.exercise, logged, timeZone)
+			minutes: {
+				day: workoutMinutes(activity.exercise, logged, timeZone, 'day', DAYS),
+				week: workoutMinutes(activity.exercise, logged, timeZone, 'week', WEEKS),
+				month: workoutMinutes(activity.exercise, logged, timeZone, 'month', MONTHS)
+			},
+			sessions: sessionRows(
+				activity.exercise.filter((e) => e.time >= recent),
+				logged,
+				timeZone
+			)
 		}
 	};
 };

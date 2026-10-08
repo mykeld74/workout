@@ -108,9 +108,11 @@ export interface WatchSession {
 	distanceMeters: number | null;
 }
 
-export interface WeekMinutes {
-	/** Monday of the week, "YYYY-MM-DD". */
-	week: string;
+export type MinuteSpan = 'day' | 'week' | 'month';
+
+export interface MinuteBucket {
+	/** Day or week Monday as "YYYY-MM-DD", or a month as "YYYY-MM". */
+	key: string;
 	lifting: number;
 	cardio: number;
 }
@@ -131,25 +133,48 @@ function kindOf(s: WatchSession, logged: Finished[]): 'lifting' | 'cardio' {
 	return isLiftingSession(s, logged) ? 'lifting' : 'cardio';
 }
 
-/** Watch workout minutes per local week (Monday start), split into lifting and cardio. */
-export function weeklyMinutes(
+function bucketKeys(span: MinuteSpan, count: number, timeZone: string, now: Date): string[] {
+	if (span === 'day') return lastDays(count, timeZone, now);
+	if (span === 'week') {
+		const thisWeek = mondayOfDay(localParts(now, timeZone).day);
+		const keys: string[] = [];
+		for (let i = count - 1; i >= 0; i--) {
+			const d = new Date(`${thisWeek}T12:00:00Z`);
+			d.setUTCDate(d.getUTCDate() - i * 7);
+			keys.push(d.toISOString().slice(0, 10));
+		}
+		return keys;
+	}
+	const [y, m] = localParts(now, timeZone).day.split('-').map(Number);
+	const keys: string[] = [];
+	for (let i = count - 1; i >= 0; i--) {
+		keys.push(new Date(Date.UTC(y, m - 1 - i, 1)).toISOString().slice(0, 7));
+	}
+	return keys;
+}
+
+function bucketOf(time: Date, span: MinuteSpan, timeZone: string): string {
+	const { day } = localParts(time, timeZone);
+	if (span === 'day') return day;
+	if (span === 'week') return mondayOfDay(day);
+	return day.slice(0, 7);
+}
+
+/** Watch workout minutes per local day, week (Monday), or month, split into lifting and cardio. */
+export function workoutMinutes(
 	sessions: WatchSession[],
 	logged: Finished[],
 	timeZone: string,
-	weeks: number,
+	span: MinuteSpan,
+	count: number,
 	now = new Date()
-): WeekMinutes[] {
-	const thisWeek = mondayOfDay(localParts(now, timeZone).day);
-	const keys: string[] = [];
-	for (let i = weeks - 1; i >= 0; i--) {
-		const d = new Date(`${thisWeek}T12:00:00Z`);
-		d.setUTCDate(d.getUTCDate() - i * 7);
-		keys.push(d.toISOString().slice(0, 10));
-	}
-	const totals = new Map(keys.map((k) => [k, { week: k, lifting: 0, cardio: 0 }]));
+): MinuteBucket[] {
+	const totals = new Map(
+		bucketKeys(span, count, timeZone, now).map((key) => [key, { key, lifting: 0, cardio: 0 }])
+	);
 	for (const s of sessions) {
-		const week = totals.get(mondayOfDay(localParts(s.time, timeZone).day));
-		if (week) week[kindOf(s, logged)] += s.minutes;
+		const bucket = totals.get(bucketOf(s.time, span, timeZone));
+		if (bucket) bucket[kindOf(s, logged)] += s.minutes;
 	}
 	return [...totals.values()];
 }

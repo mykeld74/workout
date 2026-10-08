@@ -2,6 +2,8 @@
 	import { enhance } from '$app/forms';
 	import BarChart from '#lib/components/BarChart.svelte';
 	import LineChart from '#lib/components/LineChart.svelte';
+	import LinesChart from '#lib/components/LinesChart.svelte';
+	import type { MinuteSpan } from '#lib/workout/activity.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -9,6 +11,15 @@
 	let selectedId = $state<string | null>(null);
 	let showAllSessions = $state(false);
 	let confirmRemove = $state<number | null>(null);
+	let minutesSpan = $state<MinuteSpan>('week');
+	const minuteOptions = [
+		{ id: 'day', label: 'Day' },
+		{ id: 'week', label: 'Week' },
+		{ id: 'month', label: 'Month' }
+	] as const;
+	const minuteRange = $derived(
+		minutesSpan === 'day' ? '30 days' : minutesSpan === 'week' ? '12 weeks' : '12 months'
+	);
 
 	const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
 	/** "2026-10-06" → "Oct 6" (a calendar day, so no time zone shift). */
@@ -18,6 +29,15 @@
 			day: 'numeric',
 			timeZone: 'UTC'
 		});
+	/** Day or week Monday as "Oct 6"; month key "2026-10" as "Oct 2026". */
+	const periodLabel = (key: string) =>
+		minutesSpan === 'month'
+			? new Date(`${key}-01T12:00:00Z`).toLocaleDateString(undefined, {
+					month: 'short',
+					year: 'numeric',
+					timeZone: 'UTC'
+				})
+			: dayLabel(key);
 	const selected = $derived(
 		data.exercises.find((e) => e.id === selectedId) ?? data.exercises[0] ?? null
 	);
@@ -169,27 +189,29 @@
 		{/if}
 
 		<section class="span">
-			<h2>All exercises</h2>
-			<ul class="list">
-				{#each data.exercises as e (e.id)}
-					{@const pct = change(e.points)}
-					<li>
-						<button
-							type="button"
-							aria-pressed={selected?.id === e.id}
-							onclick={() => {
-								selectedId = e.id;
-								window.scrollTo({ top: 0, behavior: 'smooth' });
-							}}
-						>
-							<span class="name">{e.name}</span>
-							<span class="muted">{setText(e.points.at(-1)!, e.unit)}</span>
-							{#if pct !== null}<span class="delta">{pct >= 0 ? '+' : '−'}{Math.abs(pct)}%</span
-								>{/if}
-						</button>
-					</li>
-				{/each}
-			</ul>
+			<details class="fold">
+				<summary>All exercises ({data.exercises.length})</summary>
+				<ul class="list">
+					{#each data.exercises as e (e.id)}
+						{@const pct = change(e.points)}
+						<li>
+							<button
+								type="button"
+								aria-pressed={selected?.id === e.id}
+								onclick={() => {
+									selectedId = e.id;
+									window.scrollTo({ top: 0, behavior: 'smooth' });
+								}}
+							>
+								<span class="name">{e.name}</span>
+								<span class="muted">{setText(e.points.at(-1)!, e.unit)}</span>
+								{#if pct !== null}<span class="delta">{pct >= 0 ? '+' : '−'}{Math.abs(pct)}%</span
+									>{/if}
+							</button>
+						</li>
+					{/each}
+				</ul>
+			</details>
 		</section>
 	{/if}
 
@@ -331,41 +353,70 @@
 		</div>
 
 		<div class="card focus span">
-			<h3 class="chart-title">Workout minutes per week</h3>
-			<p class="muted small">
-				Last 12 weeks, from your watch. Lifting = strength or circuit sessions, plus unlabeled
-				sessions that overlap a workout logged here.
-			</p>
-			<BarChart
-				label="Workout minutes per week, lifting and cardio, last 12 weeks"
-				formatY={(n) => `${Math.round(n)}`}
-				categories={data.activity.weeks.map((w) => dayLabel(w.week))}
-				series={[
-					{
-						key: 'lifting',
-						label: 'Lifting',
-						color: 'var(--chart-lift)',
-						values: data.activity.weeks.map((w) => w.lifting)
-					},
-					{
-						key: 'cardio',
-						label: 'Cardio',
-						color: 'var(--chart-cardio)',
-						values: data.activity.weeks.map((w) => w.cardio)
-					}
-				]}
-			/>
+			<div class="chart-head">
+				<div>
+					<h3 class="chart-title">Workout minutes per {minutesSpan}</h3>
+					<p class="muted small">
+						Last {minuteRange}, from your watch. Lifting = strength or circuit sessions, plus
+						unlabeled sessions that overlap a workout logged here.
+					</p>
+				</div>
+				<div class="period" role="group" aria-label="Minutes period">
+					{#each minuteOptions as option (option.id)}
+						<button
+							type="button"
+							aria-pressed={minutesSpan === option.id}
+							onclick={() => (minutesSpan = option.id)}>{option.label}</button
+						>
+					{/each}
+				</div>
+			</div>
+			{#key minutesSpan}
+				<LinesChart
+					label="Workout minutes per {minutesSpan}, lifting and cardio"
+					unit="min"
+					formatY={(n) => `${Math.round(n)}`}
+					categories={data.activity.minutes[minutesSpan].map((b) => periodLabel(b.key))}
+					series={[
+						{
+							key: 'lifting',
+							label: 'Lifting',
+							color: 'var(--chart-lift)',
+							values: data.activity.minutes[minutesSpan].map((b) => b.lifting)
+						},
+						{
+							key: 'cardio',
+							label: 'Cardio',
+							color: 'var(--chart-cardio)',
+							values: data.activity.minutes[minutesSpan].map((b) => b.cardio)
+						}
+					]}
+				/>
+			{/key}
 			<details>
 				<summary>Show as table</summary>
 				<table>
-					<thead><tr><th>Week of</th><th>Lifting</th><th>Cardio</th><th>Total</th></tr></thead>
+					<thead>
+						<tr>
+							<th
+								>{minutesSpan === 'week'
+									? 'Week of'
+									: minutesSpan === 'month'
+										? 'Month'
+										: 'Day'}</th
+							>
+							<th>Lifting</th>
+							<th>Cardio</th>
+							<th>Total</th>
+						</tr>
+					</thead>
 					<tbody>
-						{#each [...data.activity.weeks].reverse() as w (w.week)}
+						{#each [...data.activity.minutes[minutesSpan]].reverse() as b (b.key)}
 							<tr>
-								<td>{dayLabel(w.week)}</td>
-								<td>{w.lifting} min</td>
-								<td>{w.cardio} min</td>
-								<td>{w.lifting + w.cardio} min</td>
+								<td>{periodLabel(b.key)}</td>
+								<td>{b.lifting} min</td>
+								<td>{b.cardio} min</td>
+								<td>{b.lifting + b.cardio} min</td>
 							</tr>
 						{/each}
 					</tbody>
@@ -375,64 +426,66 @@
 
 		{#if data.activity.sessions.length}
 			<div class="card span">
-				<h3 class="chart-title">Watch sessions</h3>
-				<ul class="sessions">
-					{#each data.activity.sessions.slice(0, showAllSessions ? undefined : 10) as s (s.time.getTime())}
-						<li>
-							<span class="kind-dot {s.kind}" aria-hidden="true"></span>
-							<span class="s-name">{s.name}</span>
-							<span class="muted"
-								>{dayLabel(s.day)} · {timeFmt.format(s.time)} · {s.minutes} min{s.miles
-									? ` · ${s.miles} mi`
-									: ''}{s.calories ? ` · ${s.calories} cal` : ''}</span
-							>
-							<span class="s-kind">{s.kind === 'lifting' ? 'Lifting' : 'Cardio'}</span>
-							{#if s.id}
-								<div class="s-remove">
-									{#if confirmRemove === s.id}
-										<form
-											method="post"
-											action="?/removeSession"
-											use:enhance={() =>
-												async ({ update }) => {
-													await update({ reset: false });
-													confirmRemove = null;
-												}}
-										>
-											<input type="hidden" name="id" value={s.id} />
-											<span
-												>Remove this session? It won't count anywhere, even if your phone sends it
-												again.</span
+				<details class="fold">
+					<summary class="chart-title">Watch sessions ({data.activity.sessions.length})</summary>
+					<ul class="sessions">
+						{#each data.activity.sessions.slice(0, showAllSessions ? undefined : 10) as s (s.time.getTime())}
+							<li>
+								<span class="kind-dot {s.kind}" aria-hidden="true"></span>
+								<span class="s-name">{s.name}</span>
+								<span class="muted"
+									>{dayLabel(s.day)} · {timeFmt.format(s.time)} · {s.minutes} min{s.miles
+										? ` · ${s.miles} mi`
+										: ''}{s.calories ? ` · ${s.calories} cal` : ''}</span
+								>
+								<span class="s-kind">{s.kind === 'lifting' ? 'Lifting' : 'Cardio'}</span>
+								{#if s.id}
+									<div class="s-remove">
+										{#if confirmRemove === s.id}
+											<form
+												method="post"
+												action="?/removeSession"
+												use:enhance={() =>
+													async ({ update }) => {
+														await update({ reset: false });
+														confirmRemove = null;
+													}}
 											>
-											<button class="btn small danger">Remove</button>
+												<input type="hidden" name="id" value={s.id} />
+												<span
+													>Remove this session? It won't count anywhere, even if your phone sends it
+													again.</span
+												>
+												<button class="btn small danger">Remove</button>
+												<button
+													type="button"
+													class="btn ghost small"
+													onclick={() => (confirmRemove = null)}>Keep</button
+												>
+											</form>
+										{:else}
 											<button
 												type="button"
-												class="btn ghost small"
-												onclick={() => (confirmRemove = null)}>Keep</button
+												class="linkish"
+												onclick={() => (confirmRemove = s.id ?? null)}
+												>Remove<span class="sr-only"> {s.name} on {dayLabel(s.day)}</span></button
 											>
-										</form>
-									{:else}
-										<button
-											type="button"
-											class="linkish"
-											onclick={() => (confirmRemove = s.id ?? null)}
-											>Remove<span class="sr-only"> {s.name} on {dayLabel(s.day)}</span></button
-										>
-									{/if}
-								</div>
-							{/if}
-						</li>
-					{/each}
-				</ul>
-				{#if data.activity.sessions.length > 10}
-					<button
-						type="button"
-						class="btn ghost small"
-						onclick={() => (showAllSessions = !showAllSessions)}
-					>
-						{showAllSessions ? 'Show fewer' : `Show all ${data.activity.sessions.length}`}
-					</button>
-				{/if}
+										{/if}
+									</div>
+								{/if}
+							</li>
+						{/each}
+					</ul>
+					{#if data.activity.sessions.length > 10}
+						<button
+							type="button"
+							class="btn ghost small"
+							onclick={() => (showAllSessions = !showAllSessions)}
+						>
+							{showAllSessions ? 'Show fewer' : `Show all ${data.activity.sessions.length}`}
+						</button>
+					{/if}
+				</details>
 			</div>
 		{/if}
 	{/if}
@@ -512,6 +565,37 @@
 	.chart-title {
 		font: 600 17px/1.3 var(--body);
 		margin: 4px 0 0;
+	}
+
+	.chart-head {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 12px 16px;
+		margin-bottom: 8px;
+	}
+
+	.period {
+		display: flex;
+		gap: 4px;
+	}
+
+	.period button {
+		min-height: 40px;
+		padding: 0 14px;
+		border: 2px solid var(--line);
+		border-radius: var(--radius);
+		background: transparent;
+		color: var(--ink);
+		font: 600 15px/1 var(--body);
+		cursor: pointer;
+	}
+
+	.period button[aria-pressed='true'] {
+		border-color: var(--ink);
+		background: var(--ink);
+		color: var(--paper);
 	}
 
 	@media (min-width: 800px) {
@@ -615,6 +699,53 @@
 		min-height: 40px;
 		display: flex;
 		align-items: center;
+	}
+
+	details.fold {
+		interpolate-size: allow-keywords;
+	}
+
+	details.fold > summary {
+		list-style: none;
+	}
+
+	details.fold > summary::-webkit-details-marker {
+		display: none;
+	}
+
+	details.fold::details-content {
+		height: 0;
+		overflow: clip;
+		transition:
+			height 0.25s ease,
+			content-visibility 0.25s ease allow-discrete;
+	}
+
+	details.fold[open]::details-content {
+		height: auto;
+	}
+
+	details.fold > summary::before {
+		content: '';
+		flex: 0 0 auto;
+		width: 8px;
+		height: 8px;
+		margin-right: 10px;
+		border-right: 2px solid var(--ink-2);
+		border-bottom: 2px solid var(--ink-2);
+		transform: translateY(-2px) rotate(-45deg);
+		transition: transform 0.25s ease;
+	}
+
+	details.fold[open] > summary::before {
+		transform: translateY(1px) rotate(45deg);
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		details.fold::details-content,
+		details.fold > summary::before {
+			transition: none;
+		}
 	}
 
 	table {
