@@ -8,7 +8,6 @@
 	import ReadinessNote from '#lib/components/ReadinessNote.svelte';
 	import { unlockAudio } from '#lib/alert-sound.ts';
 	import { addPending, flushPending, readPending, type PendingSet } from '#lib/offline-sets.ts';
-	import { deloadWeight, nextWeight } from '#lib/workout/progression.ts';
 	import { exerciseName } from '#lib/workout/week.ts';
 	import { keepScreenOn } from '#lib/wake-lock.ts';
 	import type { PageProps } from './$types';
@@ -160,56 +159,32 @@
 
 	const allDone = $derived(data.items.every(({ item }) => doneCount(item.id) >= setsFor(item)));
 
-	/** Heaviest weight used last time on this exercise. */
-	const lastWeight = $derived(
-		Math.max(0, ...(previous?.sets.map((s) => s.weight ?? 0) ?? [])) || null
-	);
-
-	/** "Hit the top of the range on every set → next dumbbell up", with the actual weight. */
-	const hitTop = $derived(
-		!!previous &&
-			item.repHigh !== null &&
-			item.unit === 'reps' &&
-			previous.sets.length >= item.sets &&
-			previous.sets.every((s) => (s.reps ?? 0) >= item.repHigh!)
-	);
-
-	/** What to load today: lighter on a deload, one step up after hitting the top, else same. */
-	const suggested = $derived.by(() => {
-		if (!weighted || !lastWeight) return null;
-		if (data.deload) return deloadWeight(lastWeight, data.increment);
-		if (hitTop) return nextWeight(lastWeight, data.increment);
-		return null;
-	});
-
-	const progressHint = $derived.by(() => {
-		if (data.deload) {
-			return suggested
-				? `Lighter week: about ${suggested} lb, easy reps.`
-				: 'Lighter week: keep it easy, stop well short of failure.';
-		}
-		if (!hitTop) return null;
-		return suggested
-			? `You hit the top of the range every set last time. Go up to ${suggested} lb.`
-			: 'You hit the top of the range last time. Slow the lowering or add a pause.';
-	});
-
 	/** The latest logged set before this one, so every remaining set starts from what you just did. */
 	function lastBefore(setNumber: number) {
 		for (let n = setNumber - 1; n >= 1; n--) if (logs[n]) return logs[n];
 		return undefined;
 	}
 
+	/** Weight to start a set with: this set today, the set before it, or the matching set last time. */
 	function defaultWeight(setNumber: number): number | string {
-		const logged = logs[setNumber]?.weight ?? lastBefore(setNumber)?.weight;
-		if (logged != null) return logged;
-		if (suggested) return suggested;
-		return previous?.sets[setNumber - 1]?.weight ?? previous?.sets[0]?.weight ?? '';
+		return (
+			logs[setNumber]?.weight ??
+			lastBefore(setNumber)?.weight ??
+			previous?.sets[setNumber - 1]?.weight ??
+			previous?.sets[0]?.weight ??
+			''
+		);
 	}
 
-	/** Reps (or seconds) to start a set with: your latest logged set, else the top of the range. */
+	/** Reps (or seconds) to start a set with: this set today, the set before it, or last time. */
 	function defaultReps(setNumber: number): number | string {
-		return logs[setNumber]?.reps ?? lastBefore(setNumber)?.reps ?? item.repHigh ?? '';
+		return (
+			logs[setNumber]?.reps ??
+			lastBefore(setNumber)?.reps ??
+			previous?.sets[setNumber - 1]?.reps ??
+			previous?.sets[0]?.reps ??
+			''
+		);
 	}
 
 	/** The low end of the rest range: "90–120s" → 90, "60s" → 60. Null when there's no rest (stretches). */
@@ -363,7 +338,9 @@
 				{previous.sets.map(fmtSet).join(', ')}{weighted ? ' (lb × reps)' : ''}
 			</p>
 		{/if}
-		{#if progressHint}<p class="hint">{progressHint}</p>{/if}
+		{#if data.deload}
+			<p class="hint">Lighter week: keep it easy, stop well short of failure.</p>
+		{/if}
 	</section>
 
 	<p class="set-progress" aria-live="polite">

@@ -99,7 +99,7 @@
 					<option value="10">10 lb</option>
 				</select>
 			</label>
-			<p class="muted hint">Used to suggest your next weight when it's time to go up.</p>
+			<p class="muted hint">The smallest plate or dial jump you can make on your weights.</p>
 		</fieldset>
 
 		<p class="connect">
