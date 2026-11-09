@@ -37,6 +37,7 @@ import {
 	roleFor,
 	targetText
 } from '#lib/workout/generator.ts';
+import { localParts } from '#lib/workout/body-weight.ts';
 import { DEFAULT_INCREMENT, estimatedMax, volume } from '#lib/workout/progression.ts';
 import {
 	ageFromBirthDate,
@@ -49,6 +50,14 @@ import {
 	type Role,
 	type StoredProfile
 } from '#lib/workout/types.ts';
+
+/** Local week start as "YYYY-MM-DD". weeksStartOn: 0 = Sunday, 1 = Monday. */
+function weekStartDay(day: string, weekStartsOn: 0 | 1 = 0): string {
+	const d = new Date(`${day}T12:00:00Z`);
+	const back = weekStartsOn === 0 ? d.getUTCDay() : (d.getUTCDay() + 6) % 7;
+	d.setUTCDate(d.getUTCDate() - back);
+	return d.toISOString().slice(0, 10);
+}
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -246,7 +255,7 @@ export async function createProgram(userId: string, profile: Profile) {
 	return created.id;
 }
 
-export async function getDashboard(userId: string) {
+export async function getDashboard(userId: string, timeZone = 'UTC') {
 	const active = await activeProgramRow(userId);
 	if (!active) return null;
 
@@ -303,12 +312,18 @@ export async function getDashboard(userId: string) {
 		(s) => s.completedAt && workouts.some((w) => w.id === s.workoutId)
 	);
 
-	/** Next in rotation: the one after the most recently completed workout of the same type. */
+	// Sunday starts a new week for the rotation, even if last week was unfinished.
+	const thisWeekStart = weekStartDay(localParts(new Date(), timeZone).day, 0);
+	const thisWeek = inProgram.filter(
+		(s) => localParts(s.completedAt!, timeZone).day >= thisWeekStart
+	);
+
+	/** Next in rotation this week: after the latest finish, or the first if none yet. */
 	function nextOf(kind: 'strength' | 'mobility') {
 		const list = workouts.filter((w) =>
 			kind === 'mobility' ? w.kind === 'mobility' : w.kind !== 'mobility'
 		);
-		const last = inProgram.find((s) => list.some((w) => w.id === s.workoutId));
+		const last = thisWeek.find((s) => list.some((w) => w.id === s.workoutId));
 		if (!last) return list[0];
 		const i = list.findIndex((w) => w.id === last.workoutId);
 		return list[(i + 1) % list.length];

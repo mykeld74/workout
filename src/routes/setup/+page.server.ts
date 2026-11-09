@@ -1,5 +1,6 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { createProgram, getDashboard, getProfile, saveProfile } from '#lib/server/workouts.ts';
+import { safeTimeZone } from '#lib/workout/body-weight.ts';
 import {
 	ageFromBirthDate,
 	DEFAULT_EQUIPMENT,
@@ -9,9 +10,12 @@ import {
 } from '#lib/workout/types.ts';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, cookies }) => {
 	const userId = locals.user!.id;
-	const [profile, dashboard] = await Promise.all([getProfile(userId), getDashboard(userId)]);
+	const [profile, dashboard] = await Promise.all([
+		getProfile(userId),
+		getDashboard(userId, safeTimeZone(cookies.get('tz')))
+	]);
 	return {
 		profile: profile ?? {
 			birthDate: '',

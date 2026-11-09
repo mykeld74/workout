@@ -6,10 +6,11 @@ import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals, cookies }) => {
 	const userId = locals.user!.id;
+	const timeZone = safeTimeZone(cookies.get('tz'));
 	const [profile, dashboard, ready, activity] = await Promise.all([
 		getProfile(userId),
-		getDashboard(userId),
-		readiness(userId, safeTimeZone(cookies.get('tz'))),
+		getDashboard(userId, timeZone),
+		readiness(userId, timeZone),
 		// Eight days covers the current week in any time zone.
 		activitySince(userId, new Date(Date.now() - 8 * 24 * 60 * 60 * 1000))
 	]);
